@@ -66,7 +66,7 @@ Everything here is **Linux-only** (`hidraw` / `evdev` / `uinput`).
 ## Quick start
 
 ```sh
-git clone <this repo>
+git clone https://github.com/cvsqwe/OpenAula
 cd OpenAULA
 ./install.sh
 ```
