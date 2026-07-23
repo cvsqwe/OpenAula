@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenAULA web bridge (browser UI for the Aula F75 backlight)
+After=graphical-session.target
+
+[Service]
+Type=simple
+Environment=OPENAULA_WEB_ROOT=%h/.local/share/openaula/web
+Environment=OPENAULA_WEB_PORT=8787
+ExecStart=%h/.local/bin/openaula-webd
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

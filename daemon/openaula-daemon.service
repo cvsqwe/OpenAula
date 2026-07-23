@@ -1,0 +1,12 @@
+[Unit]
+Description=OpenAULA background lighting daemon (keeps the Aula F75 backlight active)
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/openaula-daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

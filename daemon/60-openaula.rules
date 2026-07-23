@@ -1,0 +1,22 @@
+# OpenAULA - grants the logged-in desktop user direct access to the Aula
+# F75 keyboard's raw HID report interface (used for lighting control, see
+# core/AulaKeyboard.cpp) and, for the optional key remap/macro engine
+# (daemon/RemapEngine.cpp), its evdev input node and the uinput device it
+# re-emits keystrokes through.
+#
+# Uses the same systemd-logind "uaccess" mechanism udev's own bundled
+# rules already use elsewhere on this system (see
+# /usr/lib/udev/rules.d/60-steam-input.rules and 60-openrgb.rules):
+# access follows whoever is logged in at the seat and is revoked on
+# logout - no static group, setuid binary, or running anything as root
+# required.
+
+# RGB control (hidraw feature reports) - vendor-specific usage page 0xff00.
+SUBSYSTEMS=="usb|hidraw", ATTRS{idVendor}=="258a", ATTRS{idProduct}=="010c", TAG+="uaccess"
+
+# Keystrokes (evdev) - only used if openaula-remapd is installed and
+# enabled via the GUI's Macros & Remap panel.
+SUBSYSTEM=="input", ATTRS{idVendor}=="258a", ATTRS{idProduct}=="010c", TAG+="uaccess"
+
+# Virtual device openaula-remapd re-emits keystrokes through.
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"

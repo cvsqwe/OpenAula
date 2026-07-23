@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>OpenAULA</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230a0b0d'/%3E%3Cpath d='M12 4.6 L18.4 8.8 L18.4 15.2 L12 19.4 L5.6 15.2 L5.6 8.8 Z' fill='none' stroke='%2300d6ff' stroke-width='1.5'/%3E%3Cpath d='M12 6.6 L17.6 18 L14.2 18 L12 12.8 L9.8 18 L6.4 18 Z' fill='%2300d6ff'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<div id="app">
+
+  <aside class="rail">
+    <!-- OpenAULA mark: a clipped-octagon "keycap" silhouette, an angular
+         hexagonal ring standing in for the "O" of Open, and a rising
+         two-legged "A" spike (no crossbar, just a notch under the apex)
+         piercing through it - an original OA monogram, not a single
+         "A-in-a-badge" shape that could be mistaken for a redrawing of
+         another peripheral brand's mark. -->
+    <div class="rail-logo" title="OpenAULA">
+      <svg viewBox="0 0 24 24" width="26" height="26">
+        <path d="M7 2 L17 2 L22 7 L22 17 L17 22 L7 22 L2 17 L2 7 Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M12 5.3 L17.7 8.65 L17.7 15.35 L12 18.7 L6.3 15.35 L6.3 8.65 Z" fill="none" stroke="currentColor" stroke-width="1"/>
+        <path d="M12 6.6 L17.6 18 L14.2 18 L12 12.8 L9.8 18 L6.4 18 Z" fill="currentColor"/>
+      </svg>
+    </div>
+    <!-- These jump-scroll to the matching section below rather than
+         swapping views - the whole app is one continuous page now. -->
+    <nav class="rail-nav">
+      <button class="rail-btn active" data-section="section-lighting" title="Lighting">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2a7 7 0 0 0-4 12.7V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.3A7 7 0 0 0 12 2Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 21h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <button class="rail-btn" data-section="profilesSide" title="Profiles">
+        <svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="4" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="10" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="16" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+      </button>
+      <button class="rail-btn" data-section="section-macros" title="Macros &amp; Remap">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 7h16M4 7l3-3M4 7l3 3M20 17H4M20 17l-3-3M20 17l-3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="rail-btn" data-section="section-settings" title="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.6 7.6 0 0 0-1.7 1l-2.3-.9-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9c.5.4 1.1.8 1.7 1L11 21h4l.4-2.9c.6-.2 1.2-.6 1.7-1l2.3.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+      </button>
+    </nav>
+    <div class="rail-spacer"></div>
+    <div class="rail-accent-dot" id="railAccentDot" title="Current accent colour"></div>
+  </aside>
+
+  <div class="shell">
+
+    <header class="topbar">
+      <div class="device-chip">
+        <span class="device-dot"></span>
+        <div class="device-text">
+          <strong>Aula F75</strong>
+          <span>Mechanical Keyboard</span>
+        </div>
+      </div>
+
+      <div class="topbar-spacer"></div>
+
+      <button class="daemon-pill" id="daemonPill">
+        <span class="daemon-dot" id="daemonDot"></span>
+        <span id="daemonLabel">Checking…</span>
+      </button>
+    </header>
+
+    <main class="content">
+
+      <section class="stage">
+
+        <!-- ===================== Lighting ===================== -->
+        <div class="page-section" id="section-lighting">
+          <div class="section-head">
+            <h2>Lighting</h2>
+            <p>Choose an effect, then fine-tune it below.</p>
+          </div>
+
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-title">Active Profile</div>
+            <div class="cdrop" id="profileDropdown"></div>
+          </div>
+
+          <div class="calib-bar" id="calibBar" style="display:none">
+            <div class="calib-bar-text">
+              <strong id="calibStepText">LED 1 of 90</strong>
+              <span>Watch your <em>physical</em> keyboard, not the screen - click the key that just lit up white. If nothing lights up, press Skip.</span>
+            </div>
+            <div class="calib-bar-actions">
+              <button type="button" class="icon-btn" id="calibBackBtn">&lt; Back</button>
+              <button type="button" class="icon-btn" id="calibSkipBtn">Skip</button>
+              <button type="button" class="primary-btn" id="calibFinishBtn">Finish</button>
+            </div>
+          </div>
+
+          <div class="keyboard-card">
+            <div class="keyboard-photo">
+              <img src="assets/aula-f75-black.png" alt="Aula F75 mechanical keyboard, black">
+              <svg id="kbSvg" preserveAspectRatio="xMidYMid meet"></svg>
+            </div>
+            <div class="keyboard-hint" id="keyboardHint">Click any key to paint it and switch to the <strong>Custom</strong> effect.</div>
+          </div>
+
+          <div class="panel-row">
+
+            <div class="panel">
+              <div class="panel-title">Brightness</div>
+              <div class="slider-row">
+                <svg class="slider-icon" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="4" fill="currentColor"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></g></svg>
+                <input type="range" id="brightnessSlider" min="0" max="100" value="100">
+                <span class="slider-value" id="brightnessValue">100%</span>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title">Effect Speed</div>
+              <div class="slider-row">
+                <svg class="slider-icon" viewBox="0 0 24 24" width="16" height="16"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg>
+                <input type="range" id="speedSlider" min="1" max="30" value="10">
+                <span class="slider-value" id="speedValue">1.0x</span>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="panel color-panel">
+            <div class="panel-title">Accent Colour</div>
+            <div class="color-panel-body">
+              <canvas id="wheel" width="150" height="150"></canvas>
+              <div class="color-panel-side">
+                <div class="vslider" id="valueSlider" tabindex="0" role="slider" aria-label="Colour brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                  <div class="vslider-track">
+                    <div class="vslider-fill" id="valueFill"></div>
+                    <div class="vslider-thumb" id="valueThumb"></div>
+                  </div>
+                </div>
+                <div class="swatch-col">
+                  <div class="swatch-preview" id="swatchPreview"></div>
+                  <code id="swatchHex">#7c5cff</code>
+                  <div class="preset-row" id="presetRow"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel effect-panel">
+            <div class="panel-title">Effect</div>
+            <div class="cdrop" id="effectDropdown"></div>
+            <p class="effect-desc" id="effectDescText"></p>
+          </div>
+        </div>
+
+        <!-- ===================== Macros & Remap ===================== -->
+        <div class="page-section" id="section-macros">
+          <div class="section-head">
+            <h2>Macros &amp; Remap</h2>
+            <p>Bind keys to other keys, or record multi-step macros.</p>
+          </div>
+
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-title">Remap Engine</div>
+            <p style="font-size:12.5px;color:var(--text-dim);line-height:1.6;margin:0 0 12px">
+              openaula-remapd grabs the F75's keystrokes system-wide to apply the bindings below to every
+              app, not just this page. It stays completely inert - never grabbing the keyboard - until
+              it's enabled here <strong>and</strong> at least one binding is set.
+            </p>
+            <div class="remap-status-row">
+              <label class="switch-row">
+                <input type="checkbox" id="remapEnabledToggle">
+                <span>Enable remaps &amp; macros</span>
+              </label>
+              <button class="daemon-pill" id="remapdPill">
+                <span class="daemon-dot" id="remapdDot"></span>
+                <span id="remapdLabel">Checking…</span>
+              </button>
+            </div>
+            <p class="effect-desc" id="remapdInstallHint" style="display:none;margin-top:10px">
+              openaula-remapd isn't installed on this machine. Run <code>./install.sh</code> from the
+              project root (see the README), then reload this page.
+            </p>
+          </div>
+
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-title">Add / Edit Binding</div>
+
+            <div class="field-row">
+              <label for="bindKeyDropdown">Physical key</label>
+              <div class="cdrop" id="bindKeyDropdown"></div>
+            </div>
+
+            <div class="field-row">
+              <label for="bindTypeDropdown">Action</label>
+              <div class="cdrop" id="bindTypeDropdown"></div>
+            </div>
+
+            <div class="field-row" id="remapTargetRow" style="display:none">
+              <label for="remapTargetDropdown">Sends</label>
+              <div class="cdrop" id="remapTargetDropdown"></div>
+            </div>
+
+            <div id="macroEditor" style="display:none">
+              <label class="micro-label">Steps, played in order</label>
+              <div class="macro-steps" id="macroSteps"></div>
+              <button type="button" class="icon-btn add-step-btn" id="addMacroStepBtn">+ Add step</button>
+            </div>
+
+            <div style="margin-top:18px">
+              <button type="button" class="primary-btn" id="saveBindingBtn">Save binding</button>
+            </div>
+          </div>
+
+          <div class="panel-title section-title">Current Bindings</div>
+          <div class="binding-list" id="bindingList"></div>
+        </div>
+
+        <!-- ===================== Settings ===================== -->
+        <div class="page-section" id="section-settings">
+          <div class="section-head">
+            <h2>Settings</h2>
+            <p>Background daemon and calibration status.</p>
+          </div>
+
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-title">Background Daemon</div>
+            <p style="font-size:12.5px;color:var(--text-dim);line-height:1.6;margin:0 0 12px">
+              openaula-daemon keeps the backlight running even when this page is closed.
+              openaula-webd (this bridge) never touches the keyboard directly - it just writes the same
+              config file the daemon reads and wakes it up instantly.
+            </p>
+            <button class="daemon-pill" id="settingsDaemonBtn" style="width:auto">
+              <span class="daemon-dot" id="settingsDaemonDot"></span>
+              <span id="settingsDaemonLabel">Checking…</span>
+            </button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">Calibration</div>
+            <p style="font-size:12.5px;color:var(--text-dim);line-height:1.6;margin:0 0 12px" id="calibrationText">—</p>
+            <p style="font-size:12.5px;color:var(--text-dim);line-height:1.6;margin:0 0 12px">
+              Recalibrating walks through every LED one at a time - watch the physical keyboard and click
+              whichever key lights up. Starting over replaces the existing mapping, so this is the way to
+              fix a calibration you got wrong.
+            </p>
+            <button type="button" class="primary-btn" id="recalibrateBtn">Recalibrate</button>
+          </div>
+        </div>
+
+      </section>
+
+      <aside class="side" id="profilesSide">
+        <div class="side-header">
+          <h2>Profiles</h2>
+          <button class="icon-btn" id="addProfileBtn" title="Save current lighting as a new profile">+</button>
+        </div>
+        <div class="profile-list" id="profileList"></div>
+      </aside>
+
+    </main>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="key-popover" id="keyPopover">
+  <input type="color" id="keyColorInput">
+  <div class="key-popover-label" id="keyPopoverLabel"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
