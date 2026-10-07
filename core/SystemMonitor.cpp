@@ -19,10 +19,8 @@ std::string readFirstLine(const std::string& path)
     return line;
 }
 
-// CPU temperature sources: every temp*_input of a CPU hwmon driver
-// (coretemp / k10temp / zenpower) - the hottest one is used, since some
-// CPUs only expose per-core sensors and no package reading - else a
-// thermal zone typed like a CPU package, else thermal_zone0.
+// cpu temp: all temp*_input of coretemp/k10temp/zenpower (some cpus only
+// have per-core sensors, so we take the max), else a thermal zone
 std::vector<std::string> findTempPaths()
 {
     namespace fs = std::filesystem;
@@ -76,7 +74,7 @@ SystemMonitor::SystemMonitor()
 
 void SystemMonitor::sample(SystemSignals& out)
 {
-    // --- CPU: busy share of jiffies since the previous sample ---
+    // cpu
     double cpu = smoothed.cpu;
     {
         std::istringstream line(readFirstLine("/proc/stat"));
@@ -96,7 +94,7 @@ void SystemMonitor::sample(SystemSignals& out)
         lastTotal = total;
     }
 
-    // --- memory ---
+    // memory
     double memory = smoothed.memory;
     {
         std::ifstream f("/proc/meminfo");
@@ -115,7 +113,7 @@ void SystemMonitor::sample(SystemSignals& out)
             memory = 1.0 - (double)available / (double)total;
     }
 
-    // --- temperature: 30 degC -> 0, 95 degC -> 1 ---
+    // temperature, 30C -> 0, 95C -> 1
     double temperature = smoothed.temperature;
     {
         double hottest = -1.0;
@@ -131,7 +129,7 @@ void SystemMonitor::sample(SystemSignals& out)
             temperature = std::clamp((hottest - 30.0) / 65.0, 0.0, 1.0);
     }
 
-    // --- network: total rx+tx bytes/s on non-loopback interfaces, log-scaled ---
+    // network, rx+tx of everything except lo
     double network = smoothed.network;
     {
         std::ifstream f("/proc/net/dev");
@@ -165,7 +163,7 @@ void SystemMonitor::sample(SystemSignals& out)
         if(primed && dt > 0 && bytes >= lastNetBytes)
         {
             double rate = (bytes - lastNetBytes) / dt;
-            // ~1 KB/s -> 0, ~100 MB/s -> 1
+            // ~1KB/s -> 0, ~100MB/s -> 1
             network = std::clamp((std::log10(std::max(rate, 1.0)) - 3.0) / 5.0, 0.0, 1.0);
         }
 

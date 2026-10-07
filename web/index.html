@@ -11,12 +11,8 @@
 
 <div id="app">
 
-  <!-- Masthead: wordmark, the three views (wireNav() in app.js swaps
-       them), and the daemon status. -->
   <header class="masthead">
     <div class="mast-brand">
-      <!-- OpenAULA mark: a clipped-octagon "keycap" silhouette with a
-           rising two-legged "A" spike - an original OA monogram. -->
       <svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
         <path d="M7 2 L17 2 L22 7 L22 17 L17 22 L7 22 L2 17 L2 7 Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
         <path d="M12 6.6 L17.6 18 L14.2 18 L12 12.8 L9.8 18 L6.4 18 Z" fill="currentColor"/>
@@ -35,14 +31,14 @@
       <span class="rail-accent-dot" id="railAccentDot" title="Selected layer colour"></span>
       <button class="daemon-pill" id="daemonPill" title="Start / stop the background daemon">
         <span class="daemon-dot" id="daemonDot"></span>
-        <span id="daemonLabel">Checking…</span>
+        <span id="daemonLabel">Checking...</span>
       </button>
     </div>
   </header>
 
   <main class="views">
 
-    <!-- ===================== Lighting ===================== -->
+    <!-- lighting -->
     <section class="view view-lighting active" id="section-lighting">
 
       <div class="workbench">
@@ -96,8 +92,6 @@
             </div>
           </div>
 
-          <!-- The keyboard sits in a dark "viewport", like a device's
-               display window, so the backlight reads as light. -->
           <div class="viewport">
             <div class="stage">
               <div class="stage-glow" aria-hidden="true"></div>
@@ -122,8 +116,6 @@
 
         </div>
 
-        <!-- Inspector: everything here edits the selected layer, except
-             Brightness, which is the board's master level. -->
         <aside class="inspector">
 
           <section class="insp-section">
@@ -171,21 +163,17 @@
       </div>
     </section>
 
-    <!-- ===================== Macros & Remap ===================== -->
+    <!-- remap -->
     <section class="view view-page" id="section-macros">
       <header class="page-head">
         <h1>Remap</h1>
-        <p>Bind keys to other keys, or to multi-step macros. Applied system-wide by openaula-remapd.</p>
+        <p>Key remaps and macros, applied system-wide by openaula-remapd.</p>
       </header>
 
       <div class="setting">
         <div class="setting-label">
           <h3>Remap engine</h3>
-          <p>
-            Grabs the F75's keystrokes system-wide so the bindings work in every app. It stays
-            completely inert - never grabbing the keyboard - until it's enabled here
-            <strong>and</strong> at least one binding is set.
-          </p>
+          <p>Grabs the keyboard so remaps work in every app. Does nothing until it's enabled and there's at least one binding.</p>
         </div>
         <div class="setting-control">
           <label class="switch-row">
@@ -194,19 +182,16 @@
           </label>
           <button class="daemon-pill" id="remapdPill">
             <span class="daemon-dot" id="remapdDot"></span>
-            <span id="remapdLabel">Checking…</span>
+            <span id="remapdLabel">Checking...</span>
           </button>
-          <p class="hint" id="remapdInstallHint" style="display:none">
-            openaula-remapd isn't installed on this machine. Run <code>./install.sh</code> from the
-            project root (see the README), then reload this page.
-          </p>
+          <p class="hint" id="remapdInstallHint" style="display:none">openaula-remapd isn't installed, run <code>./install.sh</code> and reload.</p>
         </div>
       </div>
 
       <div class="setting">
         <div class="setting-label">
           <h3>Add or edit a binding</h3>
-          <p>Pick a physical key, then what it should do instead.</p>
+          <p>Pick a key and what it should do.</p>
         </div>
         <div class="setting-control">
           <div class="field-row">
@@ -239,7 +224,7 @@
       <div class="setting">
         <div class="setting-label">
           <h3>Current bindings</h3>
-          <p>Everything that differs from the keyboard's normal behaviour.</p>
+          
         </div>
         <div class="setting-control">
           <div class="binding-list" id="bindingList"></div>
@@ -247,26 +232,22 @@
       </div>
     </section>
 
-    <!-- ===================== Settings ===================== -->
+    <!-- settings -->
     <section class="view view-page" id="section-settings">
       <header class="page-head">
         <h1>Settings</h1>
-        <p>Background daemon and LED calibration.</p>
+        <p>Daemon and LED calibration.</p>
       </header>
 
       <div class="setting">
         <div class="setting-label">
           <h3>Background daemon</h3>
-          <p>
-            openaula-daemon keeps the backlight running even when this page is closed.
-            openaula-webd (this page's server) never touches the keyboard directly - it writes the
-            config file the daemon reads and wakes it up instantly.
-          </p>
+          <p>Keeps the backlight running when this page is closed.</p>
         </div>
         <div class="setting-control">
           <button class="daemon-pill" id="settingsDaemonBtn">
             <span class="daemon-dot" id="settingsDaemonDot"></span>
-            <span id="settingsDaemonLabel">Checking…</span>
+            <span id="settingsDaemonLabel">Checking...</span>
           </button>
         </div>
       </div>
@@ -274,14 +255,10 @@
       <div class="setting">
         <div class="setting-label">
           <h3>Calibration</h3>
-          <p>
-            Walks through every LED one at a time - watch the physical keyboard and click whichever
-            key lights up. Starting over replaces the existing mapping, so this is also how to fix a
-            calibration that went wrong.
-          </p>
+          <p>Lights one LED at a time, click the key that lit up. Starts over from scratch.</p>
         </div>
         <div class="setting-control">
-          <p class="status-line" id="calibrationText">—</p>
+          <p class="status-line" id="calibrationText"></p>
           <button type="button" class="primary-btn" id="recalibrateBtn">Recalibrate</button>
         </div>
       </div>

@@ -7,15 +7,7 @@
 #include <vector>
 
 
-// Minimal single-purpose HTTP/1.1 server: exact-path routing for the JSON
-// API plus one static-file fallback for the web app itself. Written by
-// hand against raw POSIX sockets rather than pulling in a third-party HTTP
-// library, matching the rest of this project's preference for small,
-// dependency-free daemons (see daemon/main.cpp) - openaula-webd links
-// nothing but openaula-core and pthreads, same as openaula-daemon.
-//
-// Linux-only (uses /proc/self/exe and BSD sockets directly), which is
-// already true of the whole project via hidapi-hidraw.
+// tiny HTTP/1.1 server: exact-path routes for the API, static files for the rest
 struct HttpRequest
 {
     std::string method;
@@ -41,15 +33,10 @@ public:
     void get(const std::string& path, HttpHandler handler);
     void post(const std::string& path, HttpHandler handler);
 
-    // Any GET that doesn't match a registered route is served from `dir`
-    // instead ("/" maps to index.html). Paths are sanitised against
-    // traversal outside `dir`.
+    // unmatched GETs are served from dir ("/" -> index.html)
     void serveStatic(const std::string& dir);
 
-    // Blocks forever, accepting and handling connections (one detached
-    // thread per connection - traffic here is a handful of local-network
-    // browser tabs, not a workload that needs a thread pool). Returns
-    // false if the listening socket couldn't be created/bound.
+    // blocks forever, one thread per connection
     bool listen(const std::string& bindAddr, int port);
 
 

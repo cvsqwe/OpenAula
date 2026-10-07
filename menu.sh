@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# Interactive front-end for install.sh / reload.sh / uninstall.sh, plus
-# quick status/log shortcuts - for anyone who'd rather not remember the
-# exact systemctl/journalctl invocations. Everything here just shells out
-# to those scripts (or plain systemctl/journalctl) - nothing new to trust.
+# menu for install/reload/uninstall + status and logs
 set -uo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -13,8 +10,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICES=(openaula-daemon openaula-webd openaula-remapd)
 
-# Only colour the output when stdout is an actual terminal (not piped/redirected)
-# - same reasoning any well-behaved CLI uses before touching ANSI codes.
+# colours only on a terminal
 if [ -t 1 ]; then
     C_ACCENT=$'\033[38;5;51m'
     C_DIM=$'\033[38;5;244m'

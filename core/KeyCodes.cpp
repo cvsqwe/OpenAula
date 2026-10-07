@@ -6,9 +6,7 @@
 namespace
 {
 
-// Exactly mirrors buildF75Layout()'s add() call order in
-// core/KeyboardLayout.cpp (80 entries, ledIndex 0..79) - see that
-// function if this board's layout ever changes.
+// same order as buildF75Layout()
 constexpr int F75KeyCodes[] = {
     // Row 0
     KEY_ESC,

@@ -143,7 +143,7 @@ void KeyWatcher::run()
 
                 for(size_t e = 0; e < n / sizeof(input_event); e++)
                 {
-                    // 1 = press, 2 = autorepeat: both keep the key "lit"
+                    // press or autorepeat
                     if(ev[e].type == EV_KEY && ev[e].value >= 1 && ev[e].code <= KEY_MAX)
                     {
                         int key = codeToKey[ev[e].code];
@@ -160,9 +160,7 @@ void KeyWatcher::run()
                 lost = true;
         }
 
-        // Lock-key LEDs: ask the nodes directly rather than tracking
-        // EV_LED events, so the state is right even if it changed before
-        // we opened the device.
+        // read lock LEDs directly so we're right even if they changed before we opened the device
         unsigned long leds[(LED_MAX + 1 + 8 * sizeof(unsigned long) - 1) / (8 * sizeof(unsigned long))];
         bool c = false, nl = false, s = false;
 

@@ -316,8 +316,7 @@ std::vector<Layer> legacyLayers(LightingMode mode, const Color& activeColor, dou
     base.color = activeColor;
     base.speed = speed;
 
-    // Old Breathing breathed the per-key design itself; the stack
-    // equivalent is that design with a white Breath multiplied over it.
+    // old breathing = breathe the custom colours, so canvas + white breath on top
     if(mode == LightingMode::Breathing)
     {
         Layer breath;

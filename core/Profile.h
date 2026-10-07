@@ -8,12 +8,8 @@
 #include "Layer.h"
 
 
-// One named, saved lighting configuration - what "backlight profiles"
-// lets a user flip between (e.g. "Gaming", "Reading", "Streaming").
-// Distinct from AppState's live fields (the currently *applied* config,
-// which is all the daemon ever reads): activating a profile just copies
-// its fields into AppState's live fields the same way any manual edit
-// does, so the daemon never needs to know profiles exist at all.
+// a saved lighting setup. applying it just copies it into AppState,
+// the daemon doesn't know profiles exist
 struct Profile
 {
     std::string name;

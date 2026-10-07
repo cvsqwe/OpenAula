@@ -6,21 +6,16 @@
 #include "LightingMode.h"
 
 
-// How a layer combines with everything below it in the stack.
 enum class BlendMode
 {
     Normal,     // replaces what's below (mixed by opacity)
     Add,        // light adds up
     Lighten,    // brightest channel wins
-    Multiply    // dims/tints what's below - e.g. Breath over a Canvas
+    Multiply    // tints what's below
 };
 
 
-// One entry in the lighting stack. The whole backlight is the result of
-// compositing every enabled layer bottom-to-top (see
-// LightingEngine::composite), each limited to the keys in its mask - so
-// different keys can run different effects, or several effects can be
-// stacked on the same keys.
+// one layer of the lighting stack, see LightingEngine::composite
 struct Layer
 {
     LightingMode effect = LightingMode::Custom;
@@ -30,6 +25,6 @@ struct Layer
     BlendMode blend = BlendMode::Normal;
     bool enabled = true;
 
-    // One flag per visual key (KeyDef::ledIndex); empty means every key.
+    // per visual key, empty = all keys
     std::vector<bool> mask;
 };

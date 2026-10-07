@@ -6,10 +6,7 @@
 #include "Profile.h"
 
 
-// Persists the named library of saved Profile snapshots to
-// ~/.config/openaula/profiles.conf. GUI-only (the daemon never touches
-// this - see Profile.h) but deliberately kept Qt-free like the rest of
-// core/, matching AppState.
+// saved profiles, ~/.config/openaula/profiles.conf
 class ProfileStore
 {
 private:
@@ -30,16 +27,13 @@ public:
     void setActiveProfileIndex(int index) { activeIndex = index; }
 
 
-    // Returns the new profile's index.
     int addProfile(const Profile& profile);
 
     void updateProfile(int index, const Profile& profile);
 
     void renameProfile(int index, const std::string& newName);
 
-    // Removes the profile at `index`. Clears activeIndex if it pointed at
-    // the removed entry or shifts it to track the same logical profile
-    // otherwise.
+    // keeps activeIndex pointing at the same profile
     void removeProfile(int index);
 
     int indexByName(const std::string& name) const;

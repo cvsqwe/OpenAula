@@ -1,11 +1,4 @@
-/* OpenAULA - instrument-panel look, one system throughout:
-   - one dark graphite surface (the keyboard sits on it directly, so its
-     backlight is the only light on the page),
-   - one typeface (IBM Plex Sans, tabular figures for every readout),
-   - square geometry only: no rounded corners, pills or circles,
-   - hairline rules, and a single signal colour for "active / selected".
-   --live (written by paintKeyboard() in app.js) is the average colour the
-   board is showing right now. */
+/* OpenAULA */
 
 @font-face {
   font-family: "Plex Sans";
@@ -73,7 +66,6 @@ code { font-family: var(--font); font-weight: 600; }
 
 h1, h2, h3 { margin: 0; }
 
-/* Every icon is drawn with square ends and mitred corners. */
 button svg *, .brand-mark * {
   stroke-linecap: square;
   stroke-linejoin: miter;
@@ -81,7 +73,7 @@ button svg *, .brand-mark * {
 
 #app { min-height: 100vh; display: flex; flex-direction: column; }
 
-/* ---------- masthead ---------- */
+/* header */
 
 .masthead {
   display: grid;
@@ -111,7 +103,7 @@ button svg *, .brand-mark * {
 
 .tabs { display: flex; align-items: stretch; }
 
-/* Buttons keep .rail-btn because app.js selects them by it. */
+/* .rail-btn is what app.js looks for */
 .rail-btn {
   display: flex;
   align-items: center;
@@ -157,7 +149,6 @@ button svg *, .brand-mark * {
   outline-offset: 2px;
 }
 
-/* Status readout: a square lamp and a label. */
 .daemon-pill {
   display: inline-flex;
   align-items: center;
@@ -184,14 +175,14 @@ button svg *, .brand-mark * {
 .daemon-dot.on { background: var(--ok); }
 .daemon-dot.off { background: var(--bad); }
 
-/* ---------- views ---------- */
+/* views */
 
 .views { flex: 1; display: flex; flex-direction: column; }
 
 .view { display: none; }
 .view.active { display: flex; flex-direction: column; flex: 1; }
 
-/* ---------- lighting workbench ---------- */
+/* lighting */
 
 .workbench {
   flex: 1;
@@ -207,7 +198,7 @@ button svg *, .brand-mark * {
   padding: 18px 24px 22px;
 }
 
-/* ---------- calibration ---------- */
+/* calibration */
 
 .calib-bar {
   display: flex;
@@ -229,7 +220,7 @@ button svg *, .brand-mark * {
 .calib-bar .ghost-btn:hover { background: #000; color: var(--signal); }
 .calib-bar .primary-btn { background: #000; border-color: #000; color: var(--signal); }
 
-/* ---------- keyboard toolbar ---------- */
+/* toolbar */
 
 .kb-toolbar {
   display: flex;
@@ -240,7 +231,6 @@ button svg *, .brand-mark * {
   border-bottom: 1px solid var(--rule);
 }
 
-/* Segmented control: a bordered strip of square buttons. */
 .seg {
   display: inline-flex;
   border: 1px solid var(--rule-strong);
@@ -314,7 +304,6 @@ button svg *, .brand-mark * {
 .zone-chip + .zone-chip { border-left: 1px solid var(--rule); }
 .zone-chip:hover { background: var(--text); color: var(--bg); }
 
-/* Floating panel anchored under its trigger (the brush picker). */
 .popover {
   position: absolute;
   top: calc(100% + 6px);
@@ -329,11 +318,10 @@ button svg *, .brand-mark * {
 
 .popover[hidden] { display: none; }
 
-/* ---------- keyboard stage ---------- */
+/* keyboard */
 
 .viewport { flex: 1; display: flex; flex-direction: column; }
 
-/* Fills the remaining height and centres the board on the surface. */
 .stage {
   flex: 1;
   display: flex;
@@ -343,13 +331,10 @@ button svg *, .brand-mark * {
   padding: 28px 8px 8px;
   isolation: isolate;
   overflow: hidden;
-  /* The stage is its own blending group, so it needs the page colour as
-     its backdrop - otherwise the photo's black margins `lighten` against
-     transparency and show up as a dark box. */
+  /* needs a background, otherwise `lighten` blends with nothing and the photo's black edges show */
   background: var(--bg);
 }
 
-/* Halo of what the board is showing, cast on the surface behind it. */
 .stage-glow {
   position: absolute;
   z-index: -1;
@@ -363,12 +348,11 @@ button svg *, .brand-mark * {
 .keyboard-photo {
   position: relative;
   width: 100%;
-  /* ~2.27:1 photo - keep it short enough that the page fits one screen. */
+  /* photo is ~2.27:1, keep it within the screen height */
   max-width: min(1080px, max(560px, calc((100vh - 320px) * 2.27)));
   margin: 0 auto;
 }
 
-/* The photo sits on pure black; `lighten` lets it drop onto the surface. */
 .keyboard-photo img {
   width: 100%;
   display: block;
@@ -377,9 +361,6 @@ button svg *, .brand-mark * {
   -webkit-user-drag: none;
 }
 
-/* Two overlays (see buildKeyboardDom in app.js): #kbLight adds light -
-   screen-blended, so black adds nothing - and #kbSvg on top recolours
-   the legends and takes the clicks. */
 #kbLight, #kbSvg {
   position: absolute;
   inset: 0;
@@ -402,8 +383,7 @@ button svg *, .brand-mark * {
   pointer-events: none;
 }
 
-/* Fills are written per frame from paintKeyboard() as presentation
-   attributes - so no `fill` rules for these, which would override them. */
+/* fills come from app.js every frame, don't set them here */
 .key-underglow-layer { opacity: .9; }
 .key-bloom-layer { opacity: .85; }
 
@@ -440,7 +420,7 @@ button svg *, .brand-mark * {
   background: var(--signal);
 }
 
-/* ---------- profiles ---------- */
+/* profiles */
 
 .profiles-strip {
   display: flex;
@@ -510,7 +490,7 @@ button svg *, .brand-mark * {
 
 .chip-add:hover { border-style: solid; border-color: var(--text-2); color: var(--text); }
 
-/* ---------- inspector ---------- */
+/* inspector */
 
 .inspector {
   border-left: 1px solid var(--rule-strong);
@@ -538,7 +518,7 @@ button svg *, .brand-mark * {
 
 .insp-meta { font-size: 12px; font-weight: 500; color: var(--text-2); }
 
-/* ---------- layers ---------- */
+/* layers */
 
 .layer-list { border: 1px solid var(--rule-strong); background: var(--surface); }
 
@@ -598,7 +578,6 @@ button svg *, .brand-mark * {
 
 .layer-effect { flex: 1; min-width: 0; }
 
-/* The effect picker inside a row is a borderless take on .cdrop. */
 .layer-effect .cdrop-btn {
   background: transparent;
   border-color: transparent;
@@ -611,8 +590,7 @@ button svg *, .brand-mark * {
 .layer-effect .cdrop-btn:hover { border-color: var(--rule-strong); background: var(--surface); }
 .layer-effect.open .cdrop-btn { border-color: var(--rule-strong); background: var(--surface); }
 
-/* Anchor the effect list to the whole row (.layer-row is positioned),
-   not the narrow name button, so it lines up with the layer list. */
+/* list spans the whole row */
 .layer-effect.cdrop { position: static; }
 .layer-effect .cdrop-list { left: -1px; right: -1px; max-height: 400px; }
 
@@ -643,7 +621,7 @@ button svg *, .brand-mark * {
   margin-top: 14px;
 }
 
-/* ---------- colour picker (createColorPicker in app.js) ---------- */
+/* colour picker */
 
 .picker {
   display: grid;
@@ -738,7 +716,7 @@ button svg *, .brand-mark * {
 .color-note { margin: 12px 0 0; font-size: 13px; color: var(--text-2); }
 .color-note:empty { display: none; }
 
-/* ---------- output levels ---------- */
+/* sliders */
 
 .level {
   display: grid;
@@ -788,7 +766,7 @@ input[type="range"]:focus-visible { outline: none; }
 input[type="range"]:focus-visible::-webkit-slider-thumb { background: var(--signal); }
 input[type="range"]:focus-visible::-moz-range-thumb { background: var(--signal); }
 
-/* ---------- settings-style pages (Remap, Settings) ---------- */
+/* remap / settings pages */
 
 .view-page { width: 100%; max-width: 1080px; padding: 40px 24px 72px; }
 
@@ -798,7 +776,6 @@ input[type="range"]:focus-visible::-moz-range-thumb { background: var(--signal);
 
 .page-head p { margin: 10px 0 0; font-size: 15px; color: var(--text-2); max-width: 62ch; }
 
-/* One setting per row: what it is on the left, the controls on the right. */
 .setting {
   display: grid;
   grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
@@ -821,7 +798,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { background: var(--signal);
 .hint { margin: 0; font-size: 13px; color: var(--text-2); }
 .card-actions { margin-top: 4px; }
 
-/* ---------- buttons ---------- */
+/* buttons */
 
 .primary-btn {
   display: inline-flex;
@@ -857,7 +834,6 @@ input[type="range"]:focus-visible::-moz-range-thumb { background: var(--signal);
 .ghost-btn:hover { background: var(--text); color: var(--bg); }
 .ghost-btn:disabled { opacity: .4; cursor: default; }
 
-/* Small buttons app.js creates (binding row edit/delete). */
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -873,10 +849,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { background: var(--signal);
 
 .icon-btn:hover { background: var(--text); color: var(--bg); }
 
-/* ---------- custom dropdown (".cdrop") ----------
-   A from-scratch listbox used everywhere a <select> would otherwise go -
-   built once in JS (createDropdown() in app.js) so every instance shares
-   this look. */
+/* dropdown */
 
 .cdrop { position: relative; width: 100%; }
 
@@ -961,7 +934,6 @@ input[type="range"]:focus-visible::-moz-range-thumb { background: var(--signal);
 
 .cdrop-option.selected { background: var(--text); color: var(--bg); }
 
-/* Effect options: name with its one-line description beside it. */
 .cdrop-option:has(.fx-name) {
   display: grid;
   grid-template-columns: 96px 1fr;
@@ -975,7 +947,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { background: var(--signal);
 
 .cdrop-option-meta { margin-left: auto; font-size: 11px; color: var(--text-3); flex-shrink: 0; }
 
-/* ---------- remap form ---------- */
+/* remap form */
 
 .field-row { display: flex; flex-direction: column; gap: 6px; }
 
@@ -1063,7 +1035,7 @@ input[type="number"], input[type="text"] {
 
 .binding-empty { padding: 14px 12px; font-size: 13px; color: var(--text-3); }
 
-/* ---------- modal (openModal in app.js) ---------- */
+/* modal */
 
 .modal-backdrop {
   position: fixed;
@@ -1095,7 +1067,7 @@ input[type="number"], input[type="text"] {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .modal-actions .ghost-btn, .modal-actions .primary-btn { height: 34px; }
 
-/* ---------- toast ---------- */
+/* toast */
 
 .toast {
   position: fixed;
@@ -1120,14 +1092,14 @@ input[type="number"], input[type="text"] {
 
 .toast.show { opacity: 1; transform: none; }
 
-/* ---------- scrollbars ---------- */
+/* scrollbars */
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--rule-strong); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
-/* ---------- responsive ---------- */
+/* responsive */
 
 @media (max-width: 1100px) {
   .workbench { grid-template-columns: 1fr; }

@@ -5,12 +5,7 @@
 #include <vector>
 
 
-// Minimal JSON reader for parsing HTTP request bodies sent by web/app.js.
-// Deliberately not a general-purpose library (no comments/trailing-comma
-// support, no streaming) - just enough to decode the small flat objects
-// this bridge's API actually receives. Output JSON (responses) is built
-// by hand in main.cpp instead, matching the plain string-building style
-// core/StateFormat.cpp already uses.
+// minimal JSON reader for request bodies, responses are built by hand in main.cpp
 namespace json
 {
 
@@ -32,9 +27,7 @@ public:
 
     const std::vector<Value>& items() const { return arr_; }
 
-    // Parses `text` as a single JSON value. On any malformed input, returns
-    // a Null value rather than throwing - callers just get fallback
-    // defaults for missing/bad fields instead of the whole request 500ing.
+    // returns Null on malformed input instead of throwing
     static Value parse(const std::string& text);
 
 

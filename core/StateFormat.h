@@ -10,17 +10,11 @@
 #include "Layer.h"
 
 
-// Small line/field serialisation helpers shared by AppState (the live,
-// currently-applied config) and ProfileStore (the saved library of
-// configs you can switch between) - both persist the same kind of data
-// (a lighting mode, speed, accent colour, per-key colour array) to plain
-// text files, so the parsing/formatting lives here once instead of
-// twice.
+// helpers for the plain text config files
 namespace StateFormat
 {
 
-// ~/.config/openaula (or $XDG_CONFIG_HOME/openaula) - where AppState and
-// ProfileStore each keep one file.
+// $XDG_CONFIG_HOME/openaula or ~/.config/openaula
 std::string configDir();
 
 std::vector<std::string> split(const std::string& s, char sep);
@@ -43,7 +37,7 @@ const char* blendToString(BlendMode b);
 
 BlendMode blendFromString(const std::string& s);
 
-// "*" for an every-key mask, else one '0'/'1' per visual key.
+// "*" = all keys, otherwise one 0/1 per key
 std::string maskToString(const std::vector<bool>& mask);
 
 std::vector<bool> maskFromString(const std::string& s, int keyCount);
@@ -52,15 +46,12 @@ std::string layerToString(const Layer& layer);
 
 Layer layerFromString(const std::string& s, int keyCount);
 
-// Reads the "layers=N" + "layer0=..".."layerN-1=.." fields shared by
-// state.conf and each profiles.conf block; empty if there are none.
+// layers=N + layer0..layerN-1
 std::vector<Layer> layersFromFields(const std::unordered_map<std::string, std::string>& fields, int keyCount);
 
 void writeLayers(std::ostream& out, const std::vector<Layer>& layers);
 
-// The layer stack equivalent to a pre-layers config (single mode +
-// accent colour + speed), so old state/profile files keep looking the
-// same after an upgrade.
+// converts a pre-layers config (mode + colour + speed) into layers
 std::vector<Layer> legacyLayers(LightingMode mode, const Color& activeColor, double speed);
 
 }

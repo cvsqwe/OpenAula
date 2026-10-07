@@ -36,7 +36,7 @@ Color hsvColor(float h)
     };
 }
 
-// Smooth 0..1..0 ping-pong wave with the given period (seconds).
+// 0..1..0 over `period` seconds
 double triangleWave(double t, double period)
 {
     double half = period / 2.0;
@@ -104,7 +104,7 @@ void toHsv(const Color& c, double& h, double& s, double& v)
     }
 }
 
-// Same colour with its hue rotated by `shift` turns (0..1).
+// hue rotated by `shift` (0..1)
 Color shiftHue(const Color& c, double shift)
 {
     double h, s, v;
@@ -141,11 +141,8 @@ int findKey(const std::vector<KeyDef>& keys, const char* label)
     return -1;
 }
 
-// Cheap, deterministic pseudo-random 0..1 from an integer key and a
-// "salt" (a second axis - a different salt gives an independent stream
-// for the same key, e.g. per-mode or per-flicker-frame). Deterministic
-// means the GUI's live preview and the daemon's independently computed
-// frame always agree without sharing any RNG state.
+// deterministic 0..1 noise, so the web preview matches the daemon
+// without sharing any rng state
 float hash01(int x, int salt)
 {
     unsigned int h = (unsigned int)(x * 374761393 + salt * 668265263);
@@ -640,7 +637,6 @@ std::vector<Color> computeFrame(
             if(pos > sys.cpu)
                 continue;
 
-            // green -> amber -> red along the bar
             frame[i] = fromHsv(0.33 * (1.0 - pos), 1.0, 1.0);
         }
 

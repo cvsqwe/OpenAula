@@ -171,8 +171,7 @@ void ProfileStore::save() const
     {
         const Profile& p = profiles[i];
 
-        // Names can't safely contain newlines in this line-oriented
-        // format - strip them rather than corrupt the file.
+        // no newlines in names
         std::string safeName = p.name;
         for(char& c : safeName)
             if(c == '\n' || c == '\r') c = ' ';

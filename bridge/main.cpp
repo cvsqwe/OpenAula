@@ -1,13 +1,6 @@
-// openaula-webd: the bridge between openaula-daemon and a browser.
-//
-// It does NOT talk to the keyboard's HID device at all - opening a second
-// connection would fight whichever process already owns it. Instead it
-// reads and writes the exact same state files AppState/ProfileStore use,
-// then nudges openaula-daemon with SIGUSR1 so a change takes effect
-// immediately instead of waiting for its ~1s poll.
-//
-// Zero Qt dependency, same as openaula-daemon, so it's just as cheap to
-// leave running permanently.
+// openaula-webd - web ui + json api.
+// never opens the keyboard itself, just writes the state files and
+// pokes openaula-daemon with SIGUSR1.
 
 #include "HttpServer.h"
 #include "Json.h"
@@ -45,16 +38,11 @@ namespace
 
 int gKeyCount = 0;
 
-// Matches daemon/main.cpp's own local TotalPhysicalLeds - both hardcode
-// the same AulaProtocol slot count (see AppState.h's calibration comment
-// for why there's no single shared constant for it: nothing here needs
-// to build against libhidapi/AulaController at all, so pulling in the
-// header that owns this number isn't worth it for one int).
+// same as TotalPhysicalLeds in daemon/main.cpp
 constexpr int TotalPhysicalLeds = 90;
 
 
-// --- tiny JSON output helpers (mirrors core/StateFormat.cpp's plain
-// string-building style rather than pulling in a writer library) ---
+// --- json helpers ---
 
 std::string jsonEscape(const std::string& s)
 {
@@ -119,8 +107,7 @@ Color colorFromJson(const json::Value& v)
 }
 
 
-// --- daemon lifecycle (same pgrep/kill approach as MainWindow's
-// nudgeDaemon()/onDaemonButtonClicked(), just via libc instead of QProcess)
+// --- daemon start/stop ---
 
 std::vector<pid_t> daemonPids()
 {
@@ -165,8 +152,7 @@ bool startDaemon()
 
     if(pid == 0)
     {
-        // Child: detach into its own session so it survives openaula-webd
-        // restarting, then become openaula-daemon.
+        // child: new session so it outlives webd
         setsid();
         execlp("openaula-daemon", "openaula-daemon", (char*)nullptr);
         _exit(127); // execlp only returns on failure
@@ -182,9 +168,7 @@ void stopDaemon()
 }
 
 
-// --- remapd lifecycle (same pattern as the daemon helpers above, just
-// for openaula-remapd - see daemon/RemapEngine.h for why it's a
-// separate, opt-in process instead of folded into openaula-daemon) ---
+// --- remapd start/stop ---
 
 std::vector<pid_t> remapdPids()
 {
@@ -282,8 +266,7 @@ std::vector<Layer> layersFromJson(const json::Value& arr)
 {
     std::vector<Layer> layers;
 
-    // A stack is a handful of layers in practice; the cap just keeps a
-    // malformed request from writing an absurd state file.
+    // cap it, just in case
     for(const json::Value& item : arr.items())
     {
         if(layers.size() >= 16)
@@ -533,9 +516,7 @@ void printAccessUrls(int port)
 
 int main(int argc, char** argv)
 {
-    // Forked daemon children are exec'd, not waited on - ignoring SIGCHLD
-    // makes the kernel reap them automatically so they never linger as
-    // zombies under openaula-webd.
+    // don't leave zombies from the daemons we fork
     std::signal(SIGCHLD, SIG_IGN);
 
     int port = 8787;
@@ -638,8 +619,7 @@ int main(int argc, char** argv)
         state.load(gKeyCount);
         state.setLayers(layersFromJson(body["layers"]));
 
-        // Painting keys changes the canvas colours and (usually) a Canvas
-        // layer's mask together - accepting both here keeps that one save.
+        // painting sends colours + canvas mask together
         if(body["customColors"].type() == json::Value::Type::Array)
         {
             std::vector<Color> colors = state.customColorsRef();
@@ -657,9 +637,7 @@ int main(int argc, char** argv)
         res.body = stateToJson(state);
     });
 
-    // Live machine metrics for the browser's preview of the system
-    // effects - the same SystemMonitor the daemon samples, so the preview
-    // reacts to the same numbers the keyboard does.
+    // metrics for the browser preview of the system effects
     server.get("/api/system", [](const HttpRequest&, HttpResponse& res)
     {
         static std::mutex monitorMutex;
@@ -831,12 +809,7 @@ int main(int argc, char** argv)
 
     server.post("/api/calibration/start", [](const HttpRequest&, HttpResponse& res)
     {
-        // Recalibrating starts from a clean identity mapping rather than
-        // layering on top of whatever's already there - the whole point
-        // is to let someone undo a bad calibration, and any visual key
-        // whose LED they don't explicitly re-map during the wizard should
-        // fall back to "unmapped" rather than silently keeping a
-        // possibly-wrong old entry.
+        // start from a clean mapping, keys you don't map shouldn't keep stale entries
         AppState state;
         state.load(gKeyCount);
         state.resetCalibration(gKeyCount);
@@ -961,10 +934,7 @@ int main(int argc, char** argv)
         config.setEnabled(body["enabled"].asBool(false));
         config.save();
 
-        // Turning it on should just work without a separate "now start
-        // the engine" step - if it's already running this is a no-op,
-        // and if it isn't installed startRemapd() no-ops too (isInstalled
-        // in the response tells the UI to point at the installer instead).
+        // enabling also starts the engine (no-op if it's running / not installed)
         if(config.isEnabled())
             startRemapd();
 

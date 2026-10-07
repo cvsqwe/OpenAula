@@ -15,8 +15,7 @@ std::vector<unsigned char> setColor(
 );
 
 
-// Per-key packet: one Color per LED index (same wire layout as setColor,
-// but each of the 90 slots can carry its own color instead of a broadcast).
+// one colour per LED instead of one for all
 std::vector<unsigned char> setColors(
     const std::vector<Color>& colors
 );

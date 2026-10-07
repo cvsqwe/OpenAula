@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# Fast update loop for an existing install: rebuilds whatever source
-# changed, resyncs web/ (the web app openaula-webd serves), and restarts
-# whichever services install.sh already set up - without repeating its
-# sudo steps (udev rule, aula.settings hostname).
-#
-# Use this after `git pull` or local edits; use install.sh instead for a
-# first-time install or if the udev rule/hostname setup ever needs redoing.
+# quick update for an existing install: rebuild, copy web/, restart
+# services. no sudo steps - use install.sh for those.
 set -euo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -30,9 +25,7 @@ cmake --build "$BUILD_DIR" -j"$(nproc)"
 echo
 
 
-# openaula-webd serves web/ from a copy under ~/.local/share/openaula/web
-# (bridge/install.sh put it there) - resync it so HTML/CSS/JS edits show
-# up on restart without needing a C++ rebuild at all.
+# webd serves a copy of web/ from ~/.local/share/openaula/web
 WEB_DST="$HOME/.local/share/openaula/web"
 if [ -d "$WEB_DST" ]; then
     echo "-- Syncing web/ -> $WEB_DST..."
@@ -52,10 +45,7 @@ restart_if_installed() {
         return
     fi
 
-    # Stop first: overwriting a running binary in place with a plain `cp`
-    # fails ("Text file busy") since cp opens the destination for writing
-    # while the old process still has it mapped as its executable text
-    # segment - only rename()-based replacement is safe against a live process.
+    # stop first, cp onto a running binary fails (text file busy)
     systemctl --user stop "$name" 2>/dev/null || true
 
     if [ -x "$bin_src" ]; then
@@ -68,13 +58,7 @@ restart_if_installed() {
 
 restart_if_installed openaula-daemon
 
-# openaula-webd's binary copy above is a plain file copy, which - like any
-# plain copy - does NOT carry over the cap_net_bind_service capability
-# install.sh's step 5 grants so it can bind port 80 as a normal user. If
-# that's how it's set up (OPENAULA_WEB_PORT=80 in its unit), reapply the
-# capability now so this script doesn't silently leave the service
-# crash-looping ("bind() to port 80 failed: Permission denied") until
-# someone happens to re-run the full ./install.sh.
+# cp drops the port 80 capability, put it back if webd runs on 80
 WEBD_UNIT="$HOME/.config/systemd/user/openaula-webd.service"
 needs_port80_cap=0
 if [ -f "$WEBD_UNIT" ] && grep -q '^Environment=OPENAULA_WEB_PORT=80$' "$WEBD_UNIT"; then
@@ -93,16 +77,13 @@ if [ "$needs_port80_cap" = "1" ]; then
     fi
 fi
 
-# openaula-remapd is routinely installed but left stopped (see
-# daemon/install-remap.sh) - only restart it if it was already running, so
-# reload.sh can never be the thing that starts the keyboard grab.
+# only restart remapd if it was running already
 REMAPD_UNIT="$HOME/.config/systemd/user/openaula-remapd.service"
 if [ -f "$REMAPD_UNIT" ]; then
     was_active=0
     systemctl --user is-active --quiet openaula-remapd && was_active=1
 
-    # Stop before copying - same "Text file busy" reasoning as
-    # restart_if_installed() above (overwriting a live binary in place fails).
+    # stop first (text file busy)
     [ "$was_active" = "1" ] && systemctl --user stop openaula-remapd
 
     if [ -x "$BUILD_DIR/openaula-remapd" ]; then

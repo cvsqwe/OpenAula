@@ -7,12 +7,8 @@
 #include "SystemSignals.h"
 
 
-// Samples the machine-level inputs system effects react to - CPU load
-// (/proc/stat), memory use (/proc/meminfo), CPU temperature (hwmon /
-// thermal zones), network throughput (/proc/net/dev) and the local time.
-// Plain procfs/sysfs reads, no dependencies. CPU and network are rates,
-// so they need two samples: the first call after construction reports 0
-// for both.
+// cpu, memory, temperature, network and the clock for the system effects.
+// cpu and network need two samples, so the first one reads 0
 class SystemMonitor
 {
 private:
@@ -31,8 +27,7 @@ public:
 
     SystemMonitor();
 
-    // Takes a fresh sample and writes the smoothed metrics + clock into
-    // `out` (leaving its keystroke / lock-key fields untouched).
+    // fills the metrics + clock, leaves the key fields alone
     void sample(SystemSignals& out);
 
 };

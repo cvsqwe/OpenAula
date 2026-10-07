@@ -3,20 +3,16 @@
 #include <vector>
 
 
-// Everything "outside" the lighting config that a reactive or system
-// effect can respond to. openaula-daemon fills this from the real machine
-// (core/SystemMonitor.h for metrics, daemon/KeyWatcher.h for keystrokes);
-// the web preview fills an equivalent object in JS from /api/system and
-// the browser's own key events.
+// input for reactive/system effects. daemon fills it from SystemMonitor +
+// KeyWatcher, the web preview from /api/system and keydown events
 struct SystemSignals
 {
-    // 0..1 each, already smoothed by whoever produced them.
+    // 0..1
     double cpu = 0.0;
     double memory = 0.0;
-    double temperature = 0.0;   // 0 at 30 degC .. 1 at 95 degC
-    double network = 0.0;       // log-scaled throughput, 0 idle .. 1 ~ 100 MB/s
+    double temperature = 0.0;
+    double network = 0.0;
 
-    // Local wall-clock time.
     int hour = 0;
     int minute = 0;
     int second = 0;
@@ -25,7 +21,6 @@ struct SystemSignals
     bool numLock = false;
     bool scrollLock = false;
 
-    // Seconds since each visual key (KeyDef::ledIndex) was last pressed;
-    // empty or a very large value means "not recently".
+    // seconds since each key was last pressed, huge = never
     std::vector<double> keyAge;
 };

@@ -1,20 +1,9 @@
 #!/usr/bin/env bash
-# Installs openaula-remapd (the optional key remap/macro engine) as a
-# systemd --user service, and the udev rule it needs to access
-# /dev/uinput and the keyboard's evdev node without running as root.
+# installs openaula-remapd (systemd --user) + the udev rule it needs.
+# the udev part needs sudo.
 #
-# The udev rule install needs sudo (it writes to /etc/udev/rules.d) -
-# that's the one step here that isn't just copying files into $HOME, and
-# this script will prompt for your password only for that step.
-#
-# Read daemon/60-openaula.rules and daemon/RemapEngine.h before running
-# this: openaula-remapd grabs the physical keyboard's input device
-# exclusively and re-emits every keystroke itself. That's the standard
-# technique tools like keyd/interception-tools use, but it does mean a
-# bug in it can make typing stop working until the process is killed
-# (`systemctl --user stop openaula-remapd` or `pkill -x openaula-remapd`
-# from another device/TTY restores normal typing immediately - the grab
-# is released the moment the process exits).
+# note: remapd grabs the keyboard. if typing ever dies:
+#   systemctl --user stop openaula-remapd   (or pkill -x openaula-remapd)
 set -euo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then

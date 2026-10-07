@@ -33,10 +33,7 @@ const Value& Value::operator[](const std::string& key) const
 
 
 
-// Simple recursive-descent parser over a std::string, tracking position
-// with a single index. Malformed input just makes parse() bail out with
-// whatever was decoded so far turning into a Null at the top - see
-// Value::parse().
+// recursive descent, bails out with Null on bad input
 class Parser
 {
 public:
@@ -173,10 +170,7 @@ private:
                     case '\\': result += '\\'; break;
                     case '/': result += '/'; break;
                     case 'u':
-                        // Only handles the common BMP/ASCII case (four hex
-                        // digits, no surrogate pairs) - sufficient for the
-                        // key labels and profile names this API deals
-                        // with.
+                        // no surrogate pairs, fine for our strings
                         if(pos_ + 4 <= text_.size())
                         {
                             int code = std::strtol(text_.substr(pos_, 4).c_str(), nullptr, 16);

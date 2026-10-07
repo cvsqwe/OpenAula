@@ -17,8 +17,7 @@ private:
 
     std::vector<unsigned char> lastPacket;
 
-    // Guards device + lastPacket: the keep-alive thread and any effect/UI
-    // thread can both send reports concurrently.
+    // keep-alive thread and the rest can both send
     std::mutex deviceMutex;
 
 
@@ -34,7 +33,7 @@ public:
     );
 
 
-    // Sets each key's LED individually (index == protocol LED slot).
+    // one colour per LED slot
     void setColors(
         const std::vector<Color>& colors
     );

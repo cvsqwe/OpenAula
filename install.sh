@@ -1,25 +1,15 @@
 #!/usr/bin/env bash
-# OpenAULA installer.
+# OpenAULA installer
 #
-# Builds the project, then installs and autostarts (as systemd --user
-# services):
-#   - openaula-daemon  the background lighting daemon
-#   - openaula-webd    the browser bridge, which also serves web/ (the web
-#                       app itself - there is no separate desktop app anymore)
+# builds everything and installs as systemd --user services:
+#   openaula-daemon  lighting
+#   openaula-webd    web ui
+# plus the udev rule, and tries to set up http://aula.settings/
 #
-# Also installs the udev rule both of them need for unprivileged access to
-# the keyboard (see daemon/60-openaula.rules), and - best effort - sets up
-# http://aula.settings/ as a friendly local URL for the web app so you don't
-# have to remember a port number.
+# openaula-remapd gets installed too (if libevdev was found) but stays
+# disabled until you turn it on in the Remap tab.
 #
-# openaula-remapd (the key remap/macro engine) is installed too if
-# libevdev-dev was available when cmake ran, but deliberately left
-# *disabled*: read daemon/install-remap.sh and daemon/RemapEngine.h before
-# turning it on from the web app's Macros & Remap page - it works by
-# grabbing the physical keyboard's input device system-wide.
-#
-# Safe to re-run any time (e.g. after `git pull`) - every step here is
-# idempotent.
+# safe to run again.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,7 +31,7 @@ echo "== OpenAULA installer =="
 echo
 
 
-# ---- 1. build ----
+# 1. build
 
 echo "-- Configuring and building (cmake + make, first run can take a minute)..."
 cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
@@ -49,11 +39,7 @@ cmake --build "$BUILD_DIR" -j"$(nproc)"
 echo
 
 
-# ---- 2. udev rule ----
-# Needed for openaula-daemon/openaula-webd to reach the keyboard's hidraw
-# interface without running as root - see daemon/60-openaula.rules. This
-# is the one step that touches the whole system rather than just $HOME,
-# so it's the one that needs sudo.
+# 2. udev rule (needs sudo)
 
 echo "-- Installing udev rule (needs sudo) for unprivileged keyboard access..."
 sudo cp "$SCRIPT_DIR/daemon/60-openaula.rules" /etc/udev/rules.d/60-openaula.rules
@@ -62,27 +48,22 @@ sudo udevadm trigger
 echo
 
 
-# ---- 3. openaula-daemon (lighting), autostart ----
+# 3. daemon
 
 echo "-- Installing openaula-daemon..."
 "$SCRIPT_DIR/daemon/install.sh" "$BUILD_DIR"
 echo
 
 
-# ---- 4. openaula-webd (bridge + the web app), autostart ----
+# 4. webd
 
 echo "-- Installing openaula-webd..."
 "$SCRIPT_DIR/bridge/install.sh" "$BUILD_DIR"
 echo
 
 
-# ---- 5. friendly hostname: http://aula.settings/ ----
-# Best effort only: grants openaula-webd permission to bind port 80 (via a
-# file capability, not by running as root) and points aula.settings at this
-# machine in /etc/hosts. If either step fails for any reason (no sudo
-# available, read-only /etc, a filesystem without extended-attribute
-# support...) this just leaves the web app on its default
-# http://localhost:8787/ instead - nothing else here depends on it.
+# 5. http://aula.settings/ - optional. lets webd bind port 80 and adds a
+# hosts entry. if it fails we just stay on localhost:8787
 
 WEBD_BIN="$HOME/.local/bin/openaula-webd"
 WEBD_UNIT="$HOME/.config/systemd/user/openaula-webd.service"
@@ -107,7 +88,7 @@ fi
 echo
 
 
-# ---- 6. openaula-remapd (key remap/macro engine), installed but NOT started ----
+# 6. remapd - installed, not started
 
 if [ -x "$BUILD_DIR/openaula-remapd" ]; then
     echo "-- Installing openaula-remapd (left stopped - enable it from the web app's"

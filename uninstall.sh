@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
-# OpenAULA uninstaller - reverses everything install.sh (and
-# daemon/install.sh, daemon/install-remap.sh, bridge/install.sh) did:
-# stops and removes the systemd --user services, their binaries, the
-# copied web/ assets, the udev rule, and (best effort) the aula.settings
-# /etc/hosts entry.
-#
-# Safe to re-run - every step here is a no-op if that piece was never
-# installed. Doesn't touch your saved lighting/profile/remap config in
-# ~/.config/openaula/ unless you pass --purge.
+# OpenAULA uninstaller - removes services, binaries, web files, udev rule
+# and the aula.settings hosts entry. keeps ~/.config/openaula unless --purge.
 set -uo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -61,7 +54,7 @@ if [ "$ASSUME_YES" != "1" ]; then
 fi
 
 
-# ---- 1. services + binaries ----
+# 1. services + binaries
 
 for name in openaula-daemon openaula-webd openaula-remapd; do
     unit="$HOME/.config/systemd/user/$name.service"
@@ -77,7 +70,7 @@ systemctl --user daemon-reload 2>/dev/null || true
 echo
 
 
-# ---- 2. copied web app ----
+# 2. web files
 
 if [ -d "$HOME/.local/share/openaula" ]; then
     echo "-- Removing ~/.local/share/openaula..."
@@ -86,7 +79,7 @@ if [ -d "$HOME/.local/share/openaula" ]; then
 fi
 
 
-# ---- 3. udev rule ----
+# 3. udev rule
 
 if [ -f /etc/udev/rules.d/60-openaula.rules ]; then
     echo "-- Removing udev rule (needs sudo)..."
@@ -97,7 +90,7 @@ if [ -f /etc/udev/rules.d/60-openaula.rules ]; then
 fi
 
 
-# ---- 4. aula.settings /etc/hosts entry ----
+# 4. hosts entry
 
 if grep -qE '(^|[^.[:alnum:]])aula\.settings([^.[:alnum:]]|$)' /etc/hosts 2>/dev/null; then
     echo "-- Removing aula.settings from /etc/hosts (needs sudo)..."
@@ -106,7 +99,7 @@ if grep -qE '(^|[^.[:alnum:]])aula\.settings([^.[:alnum:]]|$)' /etc/hosts 2>/dev
 fi
 
 
-# ---- 5. saved config (only with --purge) ----
+# 5. config (--purge only)
 
 if [ "$PURGE" = "1" ]; then
     if [ -d "$HOME/.config/openaula" ]; then

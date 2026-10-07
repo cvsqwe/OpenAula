@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Installs openaula-webd (the browser bridge) as a systemd --user service,
-# so the web UI keeps being reachable across logins without a terminal
-# open - same pattern as daemon/install.sh uses for openaula-daemon.
+# installs openaula-webd as a systemd --user service
 set -euo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then

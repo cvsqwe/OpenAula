@@ -9,26 +9,14 @@
 #include "SystemSignals.h"
 
 
-// Pure per-key colour math for every lighting mode, shared verbatim by the
-// GUI (gui/Qt6/MainWindow) and core/daemon/main.cpp so the background
-// daemon can continue an animation exactly as the GUI would have, instead
-// of re-implementing (and risking drifting from) the same effects twice.
+// colour math for every effect. web/app.js has a port of this for the preview,
+// keep them in sync
 namespace LightingEngine
 {
 
-// Computes one animation frame in "visual key index" space (one entry per
-// entry in `keys`, same order/size) - callers remap through
-// LedCalibration before sending to hardware.
-//
-//   t           - elapsed seconds since the mode was activated, already
-//                 multiplied by the user's speed setting
-//   keys        - board layout (for spatial modes: position drives them)
-//   baseColors  - the user's saved per-key design; used as-is for Custom,
-//                 and as the brightness base for Breathing
-//   activeColor - the colour driving single-colour effects (a layer's
-//                 own colour when called from composite())
-//   sys         - live keystroke / machine state for reactive and system
-//                 effects; ignored by everything else
+// one frame, one colour per key (visual order, not calibrated).
+// t = seconds since start, already scaled by speed.
+// baseColors = custom per-key colours, activeColor = the layer colour.
 std::vector<Color> computeFrame(
     LightingMode mode,
     double t,
@@ -38,9 +26,7 @@ std::vector<Color> computeFrame(
     const SystemSignals& sys = SystemSignals()
 );
 
-// Renders the whole layer stack bottom-to-top into one frame. phases[i]
-// is layer i's own animation clock (seconds, already scaled by that
-// layer's speed); missing entries count as 0.
+// whole layer stack, bottom to top. phases[i] = clock of layer i
 std::vector<Color> composite(
     const std::vector<Layer>& layers,
     const std::vector<double>& phases,
@@ -49,17 +35,13 @@ std::vector<Color> composite(
     const SystemSignals& sys
 );
 
-// False for effects whose output never changes on its own (Custom, Off),
-// so callers can drop to a slow refresh rate.
+// Custom / Off don't change on their own
 bool isAnimated(LightingMode mode);
 
-// Effects that read SystemSignals' machine metrics / keystrokes.
 bool usesSystemMetrics(LightingMode mode);
 bool usesKeystrokes(LightingMode mode);
 
-// Scales every colour in `frame` by `brightness` (0.0..1.0) in place -
-// the final step both the GUI's preview and the values actually sent to
-// hardware go through, so what's on screen always matches the board.
+// in place, 0..1
 void applyBrightness(std::vector<Color>& frame, double brightness);
 
 }

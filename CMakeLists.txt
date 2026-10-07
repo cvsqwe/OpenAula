@@ -14,9 +14,7 @@ include_directories(
 )
 
 
-# Shared, Qt-free core: HID protocol, layout data, calibration/state
-# persistence, and the lighting animation math. Linked into the daemon
-# and the web bridge so they can never drift from each other.
+# shared core, linked into daemon + bridge
 add_library(openaula-core STATIC
 
     core/AulaKeyboard.cpp
@@ -42,8 +40,7 @@ target_link_libraries(
 )
 
 
-# Standalone background daemon - no Qt dependency at all, so it's cheap to
-# run permanently (see daemon/openaula-daemon.service).
+# lighting daemon
 add_executable(openaula-daemon
 
     daemon/main.cpp
@@ -56,10 +53,7 @@ target_link_libraries(
 )
 
 
-# Optional key-remap/macro engine (daemon/RemapEngine.h explains why it's
-# a separate binary from openaula-daemon). Needs libevdev - skip building
-# it rather than failing the whole project if that's not installed, since
-# lighting control (everything above) doesn't need it at all.
+# remap/macro engine, only if libevdev is there
 find_package(PkgConfig)
 
 if(PkgConfig_FOUND)
@@ -81,11 +75,7 @@ else()
 endif()
 
 
-# Bridge between openaula-daemon and a browser: a small Qt-free HTTP server
-# (bridge/HttpServer.*) that serves web/ and translates its JSON API into
-# the same AppState/ProfileStore file writes + SIGUSR1 nudge the daemon
-# reads (see bridge/main.cpp). Never touches the HID device itself, so
-# it can run alongside the daemon without fighting it for the connection.
+# http bridge + web ui
 add_executable(openaula-webd
 
     bridge/main.cpp

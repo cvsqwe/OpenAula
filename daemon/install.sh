@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Installs openaula-daemon as a systemd --user service so the backlight
-# keeps running in the background across logins, without the GUI open.
+# installs openaula-daemon as a systemd --user service
 set -euo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then

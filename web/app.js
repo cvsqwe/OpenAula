@@ -12,17 +12,13 @@ const state = {
 };
 
 
-// How long the user is considered "busy" (actively dragging/typing) after
-// the last interaction - the periodic state resync skips updates during
-// this window so it can't yank a slider out from under a mid-drag user.
+// skip the periodic resync for a bit after the user touches something
 const BUSY_GRACE_MS = 600;
 let lastInteractionAt = 0;
 function markBusy() { lastInteractionAt = Date.now(); }
 function isBusy() { return Date.now() - lastInteractionAt < BUSY_GRACE_MS; }
 
-// Every effect the engine knows (ids match core/StateFormat.cpp), grouped
-// the way the effect picker lists them. `color: false` marks effects with
-// their own fixed palette, where the layer colour does nothing.
+// effect ids match core/StateFormat.cpp. color: false = has its own palette
 const EFFECT_GROUPS = ['Still', 'Ambient', 'Motion', 'Reactive', 'System'];
 
 const EFFECTS = [
@@ -75,7 +71,7 @@ const BLENDS = [
 const PRESETS = ['#7c5cff', '#00d6ff', '#2fd47a', '#ffd23f', '#ff5470', '#ff8a3d', '#ffffff'];
 
 
-// ---------- tiny helpers ----------
+// ---------- helpers ----------
 
 const $ = (id) => document.getElementById(id);
 
@@ -155,13 +151,10 @@ function rgbToHsv(r, g, b) {
   return { h, s, v: max };
 }
 
-// ---------- effect preview math ----------
-// Mirrors core/LightingEngine.cpp's computeFrame() as closely as JS allows,
-// so the live browser preview shows the same animation the daemon drives
-// on the real hardware instead of a static accent-colour tint.
+// ---------- effect preview ----------
+// port of core/LightingEngine.cpp, keep in sync
 
-// h in [0,1) - matches LightingEngine.cpp's hsvColor(), NOT the 0-360
-// degree convention hsvToRgb() above uses for the colour picker.
+// h in 0..1 (hsvToRgb above takes degrees)
 function hueToRgb01(h) {
   const sector = ((h % 1 + 1) % 1) * 6;
   const i = Math.floor(sector);
@@ -189,10 +182,7 @@ function triangleWave(t, period) {
   return tri / half;
 }
 
-// Cheap deterministic pseudo-random 0..1, ported bit-for-bit (using
-// Math.imul for the same wraparound 32-bit multiply C++ does) from
-// LightingEngine.cpp's hash01() - same keys twinkle/flicker/sparkle in the
-// same pattern the daemon would show, not an independent random stream.
+// same as hash01() in LightingEngine.cpp (Math.imul for 32-bit wraparound)
 function hash01(x, salt) {
   let h = (Math.imul(x, 374761393) + Math.imul(salt, 668265263)) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
@@ -211,7 +201,7 @@ const NO_SIGNALS = { cpu: 0, memory: 0, temperature: 0, network: 0, hour: 0, min
 
 function mod(a, m) { return ((a % m) + m) % m; }
 
-// h, s, v all 0..1 - LightingEngine.cpp's fromHsv().
+// all 0..1
 function hsv01(h, s, v) { return hsvToRgb(mod(h, 1) * 360, clamp(s, 0, 1), clamp(v, 0, 1)); }
 
 function shiftHue(c, shift) {
@@ -224,8 +214,6 @@ function mixColor(a, b, k) {
   return { r: a.r + (b.r - a.r) * k, g: a.g + (b.g - a.g) * k, b: a.b + (b.b - a.b) * k };
 }
 
-// t is already speed-scaled elapsed seconds, exactly like the `t` param
-// LightingEngine::computeFrame receives from daemon/main.cpp.
 function computePreviewFrame(mode, t, keys, baseColors, activeColor, sys) {
   const n = keys.length;
   const frame = new Array(n);
@@ -567,8 +555,7 @@ function computePreviewFrame(mode, t, keys, baseColors, activeColor, sys) {
   }
 }
 
-// JS twin of LightingEngine::composite() - renders the layer stack
-// bottom-to-top, each layer only on the keys in its mask.
+// same as LightingEngine::composite
 function compositeLayers(layers, phases, keys, baseColors, sys) {
   const n = keys.length;
   const acc = new Float32Array(n * 3);
@@ -612,21 +599,9 @@ function debounce(fn, ms) {
 }
 
 
-// ---------- custom dropdown ----------
-// A from-scratch listbox standing in for every <select> in the app
-// (effect picker, profile quick-switch, macro key/action/target pickers)
-// so they all get one consistent, fully-themed look instead of the
-// browser's own barely-stylable native <select> popup.
-//
-// container: the empty .cdrop element to mount into (from index.html, or
-// a freshly created one for dynamic rows like macro steps).
-// renderOption(el, item): fills one option row's contents - defaults to
-// plain text if omitted.
-// renderButtonContent(el, item): fills the closed button's contents
-// (item is undefined if nothing is selected yet) - defaults to plain text.
-//
-// Returns { setOptions(items), setValue(value), getValue(), onChange(fn) }
-// where each item is { value, label, ...anything renderOption/Button use }.
+// ---------- dropdown ----------
+// custom <select> replacement.
+// returns { setOptions, setValue, getValue, onChange }, items are { value, label, ... }
 function createDropdown(container, { renderOption, renderButton } = {}) {
   container.classList.add('cdrop');
   container.innerHTML = '';
@@ -674,8 +649,7 @@ function createDropdown(container, { renderOption, renderButton } = {}) {
   function open() {
     list.classList.add('open');
     container.classList.add('open');
-    // Flip upward when the list would run off the bottom of the window
-    // (the layer pickers live near the bottom of the dock).
+    // open upwards if there's no room below
     list.classList.remove('up');
     const r = container.getBoundingClientRect();
     const needed = Math.min(list.scrollHeight, parseFloat(getComputedStyle(list).maxHeight) || 300) + 12;
@@ -702,8 +676,7 @@ function createDropdown(container, { renderOption, renderButton } = {}) {
     let lastGroup = null;
 
     items.forEach((item) => {
-      // Items carrying a `group` get a small heading whenever the group
-      // changes (the effect picker's Still / Ambient / Motion / ... ).
+      // group headers
       if (item.group && item.group !== lastGroup) {
         const head = document.createElement('div');
         head.className = 'cdrop-group';
@@ -756,9 +729,6 @@ function createDropdown(container, { renderOption, renderButton } = {}) {
 
 // ---------- nav ----------
 
-// Lighting / Remap / Settings are separate views; the top-bar tabs swap
-// which one is visible. Only the active view is laid out, so the lighting
-// "stage" always gets the whole window to itself.
 function wireNav() {
   document.querySelectorAll('.rail-btn[data-section]').forEach((btn) => {
     btn.addEventListener('click', () => showView(btn.dataset.section));
@@ -787,27 +757,9 @@ function showView(id) {
 
 // ---------- keyboard preview ----------
 
-// The keyboard preview is the *real* photo (web/assets/aula-f75-black.png)
-// with this SVG layered directly on top of it - not a separate abstract
-// diagram - so the coloured overlay has to land in actual photo-pixel
-// space, not the layout's abstract "key unit" space the backend sends.
-//
-// KB_PHOTO_W/H are that photo's exact pixel dimensions - the SVG viewBox
-// is set to match 1:1 so image pixels and SVG user units are the same
-// thing.
-//
-// KEY_PIXEL_RECTS[ledIndex] = [x0, y0, x1, y1] is each key's measured
-// bounding box in that same photo-pixel space, one entry per key in
-// buildF75Layout() order (so index == ledIndex). A single affine formula
-// (unit coordinate * scale + origin) can't represent this board: the
-// F-row's grouping gaps, the nav-cluster gap, and Backspace/Enter/Shift's
-// wider keycaps all have their own, mutually inconsistent spacing versus
-// the layout's uniform 1u grid. Rather than special-case each of those
-// (which is what caused the ring-placement bugs - a partial fix applied to
-// one edge of a key but not the other, distorting or misplacing several
-// keys), every key's edges here were measured directly from the photo by
-// scanning for the dark seams between keycaps. Re-measure these if the
-// photo is ever swapped for a different crop or a different keyboard.
+// the preview is the real photo with svg on top, so everything is in photo pixels.
+// KEY_PIXEL_RECTS = [x0, y0, x1, y1] per key, measured from the photo (the
+// spacing isn't a clean grid). redo these if the photo changes.
 const KB_PHOTO_W = 1166;
 const KB_PHOTO_H = 513;
 
@@ -847,23 +799,14 @@ const KEY_PIXEL_RECTS = [
   [931.5, 399.0, 995.0, 468.5], [995.0, 399.0, 1063.5, 468.5], [1063.5, 399.0, 1128.5, 468.5],
 ];
 
-// One entry per layout key: cached DOM refs so painting a frame is just a
-// handful of attribute writes, not a full SVG rebuild.
 let keyElements = [];
 let rafHandle = null;
 
-// Backlight is drawn the way a real board shows it, not as a coloured
-// sticker on each keycap: light shines through the legends and spills out
-// of the gaps under the caps, while the cap tops stay dark. Both regions
-// come from the photo itself (buildPhotoMasks): the legends are its bright
-// pixels, the gaps its near-black ones minus each cap's top face.
-//
-// Two SVGs sit over the photo:
-//   #kbLight (screen-blended) - gap underglow, legend bloom
-//   #kbSvg   (normal, on top) - the legends recoloured, hover/zone wash, hit targets
+// lighting is drawn like a real board: legends light up and light leaks
+// out under the caps, cap tops stay dark. masks for both come from the photo.
+// #kbLight is screen blended (glow), #kbSvg sits on top (legends, clicks)
 
-// Inner "top face" of a key in photo pixels - the part of the cap that
-// stays dark when lit.
+// top face of a key, stays dark
 function capTop(x0, y0, w, h) {
   return [x0 + w * 0.16, y0 + h * 0.12, w * 0.68, h * 0.62];
 }
@@ -943,7 +886,6 @@ async function buildKeyboardDom() {
   defs.appendChild(maskDef('kbLegendMask', masks.legend));
   light.appendChild(defs);
 
-  // #kbLight: underglow (blurred, then clipped to the gaps), bloom.
   const glowOuter = svgEl('g', { mask: 'url(#kbGapMask)' }, 'key-underglow-layer');
   const glowInner = svgEl('g', { filter: 'url(#kbUnderglow)' });
   glowOuter.appendChild(glowInner);
@@ -953,7 +895,6 @@ async function buildKeyboardDom() {
   light.appendChild(glowOuter);
   light.appendChild(bloomOuter);
 
-  // #kbSvg: recoloured legends, then per-key wash + hit target.
   const legendGroup = svgEl('g', { mask: 'url(#kbLegendMask)' });
   svg.appendChild(legendGroup);
   const keyGroup = svgEl('g', {});
@@ -964,9 +905,7 @@ async function buildKeyboardDom() {
     const w = x1 - x0, h = y1 - y0;
     const [tx, ty, tw, th] = capTop(x0, y0, w, h);
 
-    // A thin ring on the key's outer edge - where it meets its
-    // neighbours - rather than a filled block, so only a narrow line of
-    // light escapes at the base of the cap instead of its whole side.
+    // thin ring at the base of the cap
     const glow = svgEl('rect', { x: x0 + 2, y: y0 + 2, width: w - 4, height: h - 4, rx: 8, fill: 'none', 'stroke-width': 4 });
     glowInner.appendChild(glow);
 
@@ -991,15 +930,13 @@ async function buildKeyboardDom() {
 }
 
 
-// ---------- live signals for reactive / system previews ----------
+// ---------- reactive / system preview ----------
 
-// Browser-side stand-ins for what the daemon reads from the real machine:
-// key presses come from this page's own keydown events (so typing here
-// previews Afterglow/Splash), metrics from /api/system.
+// keys from keydown on this page, metrics from /api/system
 const signals = { ...NO_SIGNALS, keyAge: [] };
 let keyPressAt = [];
 
-// KeyboardEvent.code for each visual key, in buildF75Layout() order.
+// KeyboardEvent.code per key, same order as the layout
 const KEY_EVENT_CODES = [
   'Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
   'Backquote', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
@@ -1035,7 +972,6 @@ async function pollSystemSignals() {
   try {
     Object.assign(signals, await apiGet('/api/system'));
   } catch (e) {
-    // preview just keeps the last numbers
   }
 }
 
@@ -1053,7 +989,6 @@ function currentSignals(now) {
 
 // ---------- rendering ----------
 
-// Legend colour of a key that isn't lit - close to the photo's own.
 const UNLIT_LEGEND = { r: 118, g: 118, b: 124 };
 
 let phases = [];
@@ -1064,9 +999,7 @@ function resetAnimationClock() {
   phases = [];
 }
 
-// Runs every animation frame: advances each layer's clock by its own
-// speed (same as daemon/main.cpp), composites the stack, and writes the
-// colours straight onto the cached key elements.
+// every frame: advance layer clocks, composite, write the colours
 function paintKeyboard() {
   if (!keyElements.length || !state.appState) return;
 
@@ -1098,15 +1031,13 @@ function paintKeyboard() {
     glow.setAttribute('stroke', hex);
     bloom.setAttribute('fill', hex);
 
-    // A lit legend glows in the key's colour (pushed a little towards
-    // white at full power, like a real LED behind translucent plastic);
-    // an unlit one keeps the photo's own pale grey.
+    // lit legends take the key colour (a bit whiter at full brightness)
     const level = Math.max(c.r, c.g, c.b) / 255;
     const lit = level > 0 ? mixColor(scaleColor(c, 1 / level), WHITE, 0.28 * level) : UNLIT_LEGEND;
     legend.setAttribute('fill', rgbToHex(mixColor(UNLIT_LEGEND, lit, Math.min(1, level * 2))));
   });
 
-  // The stage's ambient glow follows what the board is actually showing.
+  // stage glow follows the average colour
   if (++frameCount % 8 === 0) {
     const n = keyElements.length;
     const avg = { r: sr / n, g: sg / n, b: sb / n };
@@ -1132,14 +1063,13 @@ function renderKeyboard() {
 }
 
 
-// ---------- keyboard tools: paint / layer keys ----------
+// ---------- tools ----------
 
 let tool = 'paint';
 let brush = { r: 255, g: 255, b: 255 };
 let erasing = false;
-let stroke = null;   // { kind: 'paint' | 'zone', value, touched:Set }
+let stroke = null;
 
-// Quick key sets for the "Layer keys" tool, by layout label.
 const ZONES = [
   { id: 'all', label: 'All' },
   { id: 'none', label: 'None' },
@@ -1195,10 +1125,8 @@ function applyZone(id) {
   pushLayers();
 }
 
-// Topmost Canvas layer (where brush strokes land), creating one on top of
-// the stack - covering no keys yet - if there isn't one. Painting a key
-// adds it to that layer's mask, so paint always shows over the effects
-// below; erasing removes it again and reveals them.
+// paint goes on the top Canvas layer (made if missing). painting adds the
+// key to its mask, erasing removes it
 function canvasLayerIndex() {
   for (let i = layers.length - 1; i >= 0; i--) {
     if (layers[i].effect === 'custom') return i;
@@ -1252,7 +1180,7 @@ function wireKeyboardPointer(svg) {
       return;
     }
 
-    // Alt-click: eyedropper - take that key's painted colour as the brush.
+    // alt-click = eyedropper
     if (ev.altKey) {
       const c = state.appState.customColors[i];
       if (c) setBrush(c);
@@ -1326,7 +1254,7 @@ function updateToolUI() {
     : 'No layer selected';
 
   $('keyboardHint').textContent = tool === 'paint'
-    ? 'Click or drag across keys to paint them · Alt-click picks a key’s colour'
+    ? "Click or drag across keys to paint them, Alt+click picks a key's colour"
     : 'Click or drag to choose which keys the selected layer covers';
 }
 
@@ -1335,7 +1263,6 @@ function wireTools() {
     b.addEventListener('click', () => setTool(b.dataset.tool));
   });
 
-  // The brush swatch opens the same picker the inspector uses, in a popover.
   const pop = $('brushPop');
   const brushPicker = createColorPicker($('brushPicker'), (rgb) => setBrush(rgb));
   const closePop = (ev) => {
@@ -1378,8 +1305,7 @@ function wireTools() {
 
 // ---------- layers ----------
 
-// Working copy of the stack (same shape as /api/state's `layers`), edited
-// locally and pushed back debounced - index 0 is the bottom layer.
+// local copy of the layer stack, index 0 = bottom
 let layers = [];
 let selectedLayer = 0;
 
@@ -1416,7 +1342,7 @@ const pushLayers = (() => {
       withColors = false;
       try {
         const res = await apiPost('/api/layers', body);
-        // Keep the local stack: it may already be newer than this reply.
+        // keep our layers, they might be newer than the response
         state.appState = { ...res, layers };
       } catch (e) {
         toast('Could not reach openaula-webd');
@@ -1458,8 +1384,7 @@ function iconButton(svg, title, onClick) {
   return b;
 }
 
-// Only restyles the existing rows (no rebuild), so a click that both
-// selects a row and opens its effect picker keeps the picker open.
+// no re-render here, otherwise the effect dropdown closes right after opening
 function selectLayer(i) {
   selectedLayer = i;
   document.querySelectorAll('#layerList .layer-row').forEach((row) => {
@@ -1492,7 +1417,7 @@ function removeLayer(i) {
 }
 
 function addLayer() {
-  if (layers.length >= 16) { toast('That’s plenty of layers'); return; }
+  if (layers.length >= 16) { toast('Max 16 layers'); return; }
   const base = layers[selectedLayer];
   const layer = newLayer('starlight', {
     color: base ? { ...base.color } : undefined,
@@ -1506,7 +1431,7 @@ function addLayer() {
   pushLayers();
 }
 
-// Rows are listed top-of-stack first, like any layers panel.
+// top layer first
 function renderLayers() {
   const list = $('layerList');
   list.innerHTML = '';
@@ -1605,7 +1530,6 @@ function renderBlend() {
   });
 }
 
-// Colour, speed and opacity always edit the selected layer.
 function loadSelectedLayerIntoControls() {
   const layer = layers[selectedLayer];
   if (!layer) return;
@@ -1669,10 +1593,8 @@ function wireSliders() {
 
 // ---------- colour picker ----------
 
-// One picker component used everywhere a colour is chosen (the selected
-// layer's colour in the inspector, and the paint brush): a square of
-// saturation (x) by brightness (y), a vertical hue strip, a hex field and
-// preset swatches - no native <input type=color> dialog.
+// saturation/brightness square + hue strip + hex + presets.
+// used for the layer colour and the brush
 function createColorPicker(host, onInput) {
   host.classList.add('picker');
   host.innerHTML =
@@ -1773,7 +1695,7 @@ function createColorPicker(host, onInput) {
 
   const set = (rgb) => {
     const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-    // Keep the current hue for greys/black, where HSV has none.
+    // greys have no hue, keep the old one
     if (hsv.s > 0.001 && hsv.v > 0.001) h = hsv.h;
     sat = hsv.s; val = hsv.v;
     drawSquare();
@@ -1808,8 +1730,6 @@ function createColorPicker(host, onInput) {
 
 let layerPicker = null;
 
-// Mirrors the selected layer's colour into the header lamp and the
-// inspector's hex readout.
 function showLayerColor(rgb) {
   const hex = rgbToHex(rgb);
   $('swatchHex').textContent = hex.toUpperCase();
@@ -1833,9 +1753,7 @@ function wireLayerPicker() {
 
 // ---------- modal ----------
 
-// In-page replacement for prompt()/confirm(), styled like the rest of the
-// app. Resolves to the entered text (input mode), true/false (confirm
-// mode), or null when cancelled.
+// prompt()/confirm() replacement. resolves to text, true, or null
 let modalResolve = null;
 
 function closeModal(result) {
@@ -1926,7 +1844,7 @@ function renderProfiles() {
   if (profiles.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'profile-empty';
-    empty.textContent = 'None yet — set up your lighting, then hit Save.';
+    empty.textContent = 'No profiles yet';
     list.appendChild(empty);
     return;
   }
@@ -1963,7 +1881,7 @@ function renderProfiles() {
     deleteBtn.title = 'Delete';
     deleteBtn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      if (!await askConfirm('Delete profile?', '"' + p.name + '" will be removed. This can’t be undone.', 'Delete')) return;
+      if (!await askConfirm('Delete profile?', '"' + p.name + '" will be deleted.', 'Delete')) return;
       const res = await apiPost('/api/profiles/delete', { index: i });
       state.profiles = res;
       renderProfiles();
@@ -1983,17 +1901,11 @@ function renderProfiles() {
 }
 
 
-// ---------- macros & remap ----------
+// ---------- remap ----------
 
-// The working copy of the currently-edited binding's macro steps - kept
-// separate from state.remap until "Save binding" is clicked, same as the
-// key colour popover only commits on input rather than every keystroke.
+// steps of the binding being edited, saved on "Save binding"
 let macroSteps = [];
 
-// Same createDropdown() listbox used everywhere else in the app (effect
-// picker, profile quick-switch) rather than native <select>s, so the
-// Macros & Remap form matches the rest of the app's look instead of
-// falling back to the browser's own barely-stylable popup.
 let bindKeyDropdown = null;
 let bindTypeDropdown = null;
 let remapTargetDropdown = null;
@@ -2026,7 +1938,7 @@ function wireMacros() {
     const running = state.remap && state.remap.running;
     try {
       await apiPost(running ? '/api/remapd/stop' : '/api/remapd/start', {});
-      toast(running ? 'Stopping remap engine…' : 'Starting remap engine…');
+      toast(running ? 'Stopping remap engine...' : 'Starting remap engine...');
       setTimeout(refreshRemap, 700);
     } catch (e) {
       toast('Could not reach openaula-webd');
@@ -2068,14 +1980,12 @@ function renderRemapEngineStatus() {
   const dot = $('remapdDot');
   const label = $('remapdLabel');
   dot.className = 'daemon-dot ' + (r.running ? 'on' : 'off');
-  label.textContent = r.running ? 'Engine Active — click to stop' : 'Engine Stopped — click to start';
+  label.textContent = r.running ? 'Running (click to stop)' : 'Stopped (click to start)';
 
   $('remapdInstallHint').style.display = r.installed ? 'none' : '';
 }
 
-// Both dropdowns offer the exact same set of physical/target keys, so
-// they're built once from the first /api/remap response rather than
-// re-populated (and losing whatever the user had open) on every refresh.
+// only built once so a refresh doesn't close an open dropdown
 function populateKeySelects() {
   if (keySelectsPopulated) return;
 
@@ -2098,8 +2008,7 @@ function updateBindingEditorVisibility() {
   $('macroEditor').style.display = type === 'macro' ? '' : 'none';
 }
 
-// Selecting a physical key loads whatever binding (if any) already exists
-// for it, so "Add" and "Edit" are the same form instead of two flows.
+// picking a key loads its current binding
 function loadBindingIntoEditor() {
   if (!state.remap || !bindKeyDropdown) return;
 
@@ -2265,15 +2174,9 @@ function renderBindingList() {
 }
 
 
-// ---------- calibration wizard ----------
+// ---------- calibration ----------
 
-// Walks through every physical LED one at a time (see core/CalibrationSession
-// and daemon/main.cpp - while a session is active, the daemon lights only
-// that one LED white and ignores whatever effect is otherwise configured)
-// and asks "which key just lit up on your physical keyboard?" - answering
-// records that key's calibration mapping, same as the deleted Qt GUI's
-// CalibrationDialog did, just spread across HTTP calls instead of one
-// process holding the HID connection directly.
+// daemon lights one LED at a time, the user clicks the key that lit up
 function wireCalibration() {
   $('recalibrateBtn').addEventListener('click', startCalibration);
   $('calibBackBtn').addEventListener('click', () => calibrationStep('/api/calibration/back'));
@@ -2299,9 +2202,7 @@ async function calibrationStep(path) {
 
     if (!state.calibration.active) {
       toast('Calibration finished');
-      // The mapping (and possibly the "calibrated" flag) just changed on
-      // the backend - resync the full app state so Custom-mode colours
-      // land on the right physical keys again.
+      // mapping changed, reload state
       const fresh = await apiGet('/api/state');
       state.appState = fresh;
       applyStateToControls();
@@ -2358,14 +2259,14 @@ function renderDaemonStatus(running) {
   label.textContent = running ? 'Daemon Active' : 'Daemon Offline';
 
   sDot.className = 'daemon-dot ' + (running ? 'on' : 'off');
-  sLabel.textContent = running ? 'Running — click to stop' : 'Stopped — click to start';
+  sLabel.textContent = running ? 'Running (click to stop)' : 'Stopped (click to start)';
 }
 
 function wireDaemonControls() {
   const toggle = async () => {
     const running = state.appState && state.appState.daemonRunning;
     await apiPost(running ? '/api/daemon/stop' : '/api/daemon/start', {});
-    toast(running ? 'Stopping background daemon…' : 'Starting background daemon…');
+    toast(running ? 'Stopping background daemon...' : 'Starting background daemon...');
     setTimeout(pollStatus, 700);
   };
 
@@ -2379,17 +2280,12 @@ async function pollStatus() {
     if (state.appState) state.appState.daemonRunning = status.running;
     renderDaemonStatus(status.running);
   } catch (e) {
-    // Bridge unreachable - leave the last known status showing rather
-    // than flashing an error on every missed poll.
+    // keep the last status
   }
 }
 
-// The page only ever mutated its local copy of appState from POST
-// responses - if another browser tab changed anything, this
-// page would show stale data forever. Poll the real state periodically
-// and re-render, but never while the user is mid-interaction (dragging a
-// a slider or the colour picker) so a network refresh
-// can't yank a control out from under their pointer.
+// re-sync with the server every few seconds (other tabs etc.), but not
+// while the user is dragging something
 async function refreshState() {
   if (isBusy() || stroke || document.querySelector('.cdrop.open')) return;
 
@@ -2399,15 +2295,13 @@ async function refreshState() {
     state.appState = fresh;
     applyStateToControls(layersChanged);
   } catch (e) {
-    // Handled by pollStatus's own error path already covering reachability.
   }
 }
 
 
-// ---------- apply loaded state to controls ----------
+// ---------- state -> controls ----------
 
-// reloadLayers: replace the local layer stack with the server's (on load,
-// after applying a profile, or when another tab changed it).
+// reloadLayers = take the server's layers (load, profile, other tab)
 function applyStateToControls(reloadLayers = true) {
   const s = state.appState;
   if (!s) return;
@@ -2426,14 +2320,14 @@ function applyStateToControls(reloadLayers = true) {
   }
 
   $('calibrationText').textContent = s.calibrated
-    ? 'This keyboard has been calibrated — per-key colours map to the correct physical LEDs.'
-    : 'Not calibrated yet - per-key colours may land on the wrong keys until this keyboard has been calibrated.';
+    ? 'Calibrated.'
+    : 'Not calibrated, per-key colours may end up on the wrong keys.';
 
   renderDaemonStatus(s.daemonRunning);
 }
 
 
-// ---------- boot ----------
+// ---------- init ----------
 
 function init() {
   wireNav();
@@ -2466,9 +2360,7 @@ function init() {
     })
     .catch(() => toast('Could not reach openaula-webd'));
 
-  // A calibration session lives on the backend, so it survives a page
-  // reload - pick it back up instead of leaving the keyboard stuck
-  // lighting one LED with no wizard on screen.
+  // calibration might still be running from before a reload
   apiGet('/api/calibration')
     .then((calib) => {
       state.calibration = calib;

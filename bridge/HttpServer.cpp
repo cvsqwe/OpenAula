@@ -115,8 +115,7 @@ bool HttpServer::serveStaticFile(const std::string& reqPath, HttpResponse& res) 
     std::filesystem::path base = std::filesystem::weakly_canonical(staticDir);
     std::filesystem::path full = std::filesystem::weakly_canonical(base / relative.substr(1));
 
-    // Refuse anything that escaped `base` via ".." - the only thing this
-    // static handler should ever expose is web/*.
+    // don't let ".." escape the web root
     auto [baseEnd, fullMismatch] = std::mismatch(base.begin(), base.end(), full.begin());
     if(baseEnd != base.end())
         return false;
@@ -143,9 +142,7 @@ void HttpServer::handleConnection(int clientFd)
 
     size_t headerEnd = std::string::npos;
 
-    // Read until we have the full header block, then keep reading until
-    // we have Content-Length more bytes of body - two small loops rather
-    // than one, since we don't know the body length until headers are in.
+    // headers first, then the body (Content-Length)
     while(headerEnd == std::string::npos)
     {
         ssize_t n = recv(clientFd, buf, sizeof(buf), 0);
@@ -227,9 +224,7 @@ void HttpServer::handleConnection(int clientFd)
         res.status = 204;
         res.body = "";
     }
-    // API handlers load, modify and save the same state files, so they run
-    // one at a time - two overlapping requests (say a brush stroke and a
-    // brightness drag) would otherwise each save over the other's change.
+    // handlers all load/save the same files, run them one at a time
     else if(method == "GET" && getRoutes.count(req.path))
     {
         std::lock_guard<std::mutex> lock(apiMutex);
@@ -242,7 +237,6 @@ void HttpServer::handleConnection(int clientFd)
     }
     else if(method == "GET" && serveStaticFile(req.path, res))
     {
-        // handled
     }
     else
     {

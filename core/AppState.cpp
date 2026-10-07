@@ -77,9 +77,7 @@ void AppState::load(int keyCount)
         fields[line.substr(0, eq)] = line.substr(eq + 1);
     }
 
-    // A layout change (different key count) invalidates any stored
-    // calibration/custom colours - silently reapplying old indices to a
-    // reshuffled key set would be worse than starting over.
+    // different key count -> old calibration/colours are useless
     auto keyCountIt = fields.find("keycount");
     if(keyCountIt == fields.end() || std::atoi(keyCountIt->second.c_str()) != keyCount)
         return;

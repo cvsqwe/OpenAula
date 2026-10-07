@@ -1,12 +1,5 @@
-// openaula-daemon: keeps the F75's backlight showing exactly what the GUI
-// last configured (static design or a running animation), independent of
-// whether the GUI is even open. Reads the same state file the GUI writes
-// (see core/AppState.h) and re-polls it roughly once a second, so changes
-// made in the GUI while this is running take effect without a restart.
-//
-// Deliberately has zero Qt dependency - it links only core/ and hidapi, so
-// it's cheap enough to run permanently as a systemd --user service (see
-// openaula-daemon.service).
+// openaula-daemon - keeps the backlight running. reads state.conf (re-reads
+// every second or on SIGUSR1) and drives the keyboard over hidraw.
 
 #include "../core/AulaController.h"
 #include "../core/AppState.h"
@@ -30,9 +23,7 @@ namespace
 
 std::atomic<bool> running{true};
 
-// Set by SIGUSR1 (sent by the GUI right after it edits AppState's file)
-// so a change made while daemon-attached takes effect immediately instead
-// of waiting for the next ~1s poll.
+// SIGUSR1 from webd -> reload now
 std::atomic<bool> forceReload{false};
 
 void handleSignal(int)
@@ -60,8 +51,7 @@ std::vector<Color> toPhysical(const std::vector<Color>& visualFrame, const AppSt
     return physical;
 }
 
-// Sleeps up to `ms`, waking early when SIGUSR1 asks for a reload so a
-// static design still updates instantly after an edit.
+// sleep, but wake up early on SIGUSR1
 void sleepUnlessNudged(int ms)
 {
     for(int slept = 0; slept < ms && running && !forceReload; slept += 20)
@@ -108,9 +98,8 @@ int main()
     auto lastFrame = lastStateCheck;
     auto lastSystemSample = lastStateCheck - std::chrono::seconds(10);
 
-    // Each layer's own animation clock, advanced by its speed every frame
-    // (rather than "elapsed * speed") so dragging a speed slider changes
-    // the pace smoothly instead of jumping the animation to a new phase.
+    // per-layer clocks, advanced by speed each frame so changing the
+    // speed doesn't make the animation jump
     std::vector<double> phases;
 
     SystemSignals signals;
@@ -133,14 +122,7 @@ int main()
             calib.load();
         }
 
-        // While a calibration session (see the web app's Settings panel)
-        // is active, that takes over the hardware entirely: light exactly
-        // the one physical LED the wizard is currently asking about
-        // (white, full brightness, everything else off) instead of
-        // whatever effect is otherwise configured, so the user can watch
-        // the real keyboard and see which key it is. Bridge writes the
-        // step forward/back as the user answers and nudges us the same
-        // way it does for any other lighting change.
+        // calibration: only the LED being asked about, white
         if(calib.active())
         {
             std::vector<Color> calibFrame(TotalPhysicalLeds, Color{0, 0, 0});

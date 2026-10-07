@@ -1,8 +1,6 @@
 #pragma once
 
 
-// Shared between the GUI and the background daemon so both drive the
-// keyboard identically - see LightingEngine.h.
 enum class LightingMode
 {
     Custom,
@@ -26,16 +24,15 @@ enum class LightingMode
     Sweep,
     Off,
 
-    // Ambient additions.
     Aurora,
     Matrix,
     Gradient,
 
-    // Reactive: driven by real keystrokes (see SystemSignals::keyAge).
+    // react to key presses
     Afterglow,
     Splash,
 
-    // System: driven by live machine metrics (see core/SystemMonitor.h).
+    // react to the system
     CpuLoad,
     Memory,
     Thermal,

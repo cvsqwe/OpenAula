@@ -28,9 +28,7 @@ private:
 public:
 
 
-    // Joins the keep-alive thread if it's still running, so destroying a
-    // connected controller (e.g. closing the app) can't call
-    // std::terminate() from an unjoined std::thread.
+    // joins the keep-alive thread so we don't std::terminate
     ~AulaController();
 
 

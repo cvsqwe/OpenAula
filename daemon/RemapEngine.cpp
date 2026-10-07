@@ -122,9 +122,7 @@ void RemapEngine::run()
 
         if(!config.isEnabled())
         {
-            // Nothing to do yet - don't grab (grabbing is the whole risk
-            // here); just wait and re-check so enabling it later from the
-            // GUI takes effect without restarting this process.
+            // nothing to do, don't grab. check again later
             libevdev_free(dev);
             close(fd);
             sleepWhileRunning(running, 2000);
@@ -189,9 +187,7 @@ void RemapEngine::run()
 
             if(rc == LIBEVDEV_READ_STATUS_SYNC)
             {
-                // Dropped events (buffer overrun): drain the forced-sync
-                // queue and keep going - nothing here depends on ordering
-                // across a drop.
+                // dropped events, resync and carry on
                 while(rc == LIBEVDEV_READ_STATUS_SYNC)
                     rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_SYNC, &ev);
 
@@ -233,9 +229,7 @@ void RemapEngine::run()
 
             if(binding->type == BindingType::Macro)
             {
-                // Fire once per physical press only - ignore the release
-                // and any auto-repeat (value 2) so holding the key down
-                // doesn't replay the macro.
+                // only on the initial press, not release/autorepeat
                 if(ev.value != 1)
                     continue;
 
