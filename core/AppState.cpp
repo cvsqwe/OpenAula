@@ -58,6 +58,7 @@ void AppState::load(int keyCount)
 {
     resetCalibration(keyCount);
     customColors.assign(keyCount, Color{24, 24, 28});
+    layerStack = StateFormat::legacyLayers(currentMode, currentActiveColor, currentSpeed);
 
     std::ifstream file(filePath());
 
@@ -111,6 +112,10 @@ void AppState::load(int keyCount)
 
     if(fields.count("profile"))
         activeProfileName = fields["profile"];
+
+    layerStack = StateFormat::layersFromFields(fields, keyCount);
+    if(!fields.count("layers"))
+        layerStack = StateFormat::legacyLayers(currentMode, currentActiveColor, currentSpeed);
 }
 
 
@@ -136,4 +141,5 @@ void AppState::save() const
     file << "active=" << StateFormat::colorToString(currentActiveColor) << "\n";
     file << "colors=" << StateFormat::colorsToString(customColors) << "\n";
     file << "profile=" << activeProfileName << "\n";
+    StateFormat::writeLayers(file, layerStack);
 }

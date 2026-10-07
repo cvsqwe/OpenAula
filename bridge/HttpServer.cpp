@@ -227,13 +227,18 @@ void HttpServer::handleConnection(int clientFd)
         res.status = 204;
         res.body = "";
     }
+    // API handlers load, modify and save the same state files, so they run
+    // one at a time - two overlapping requests (say a brush stroke and a
+    // brightness drag) would otherwise each save over the other's change.
     else if(method == "GET" && getRoutes.count(req.path))
     {
-        getRoutes[req.path](req, res);
+        std::lock_guard<std::mutex> lock(apiMutex);
+        getRoutes.at(req.path)(req, res);
     }
     else if(method == "POST" && postRoutes.count(req.path))
     {
-        postRoutes[req.path](req, res);
+        std::lock_guard<std::mutex> lock(apiMutex);
+        postRoutes.at(req.path)(req, res);
     }
     else if(method == "GET" && serveStaticFile(req.path, res))
     {

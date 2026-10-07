@@ -5,6 +5,7 @@
 
 #include "Color.h"
 #include "LightingMode.h"
+#include "Layer.h"
 
 
 // Single source of truth for everything that needs to survive across runs:
@@ -33,6 +34,12 @@ private:
     double currentBrightness = 1.0;
     Color currentActiveColor{124, 92, 255};
     std::vector<Color> customColors;
+
+    // The lighting stack the daemon actually renders (see Layer.h). The
+    // single mode/speed/accent fields above predate it and are kept only
+    // so older files and API callers still mean something: loading a file
+    // without layers converts them via StateFormat::legacyLayers().
+    std::vector<Layer> layerStack;
 
     // Name of the profile (see Profile.h/ProfileStore.h) that produced the
     // fields above, purely so the GUI can re-highlight it after a restart.
@@ -86,6 +93,9 @@ public:
 
     const std::vector<Color>& customColorsRef() const { return customColors; }
     void setCustomColors(const std::vector<Color>& colors) { customColors = colors; }
+
+    const std::vector<Layer>& layers() const { return layerStack; }
+    void setLayers(const std::vector<Layer>& l) { layerStack = l; }
 
     const std::string& activeProfile() const { return activeProfileName; }
     void setActiveProfile(const std::string& name) { activeProfileName = name; }

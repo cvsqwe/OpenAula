@@ -32,6 +32,7 @@ add_library(openaula-core STATIC
     core/RemapConfig.cpp
     core/KeyCodes.cpp
     core/CalibrationSession.cpp
+    core/SystemMonitor.cpp
 )
 
 target_link_libraries(
@@ -46,6 +47,7 @@ target_link_libraries(
 add_executable(openaula-daemon
 
     daemon/main.cpp
+    daemon/KeyWatcher.cpp
 )
 
 target_link_libraries(

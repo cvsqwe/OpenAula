@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <filesystem>
+#include <ostream>
 
 
 namespace StateFormat
@@ -136,6 +137,17 @@ const char* modeToString(LightingMode m)
         case LightingMode::Fireworks:   return "fireworks";
         case LightingMode::Sweep:       return "sweep";
         case LightingMode::Off:         return "off";
+        case LightingMode::Aurora:      return "aurora";
+        case LightingMode::Matrix:      return "matrix";
+        case LightingMode::Gradient:    return "gradient";
+        case LightingMode::Afterglow:   return "afterglow";
+        case LightingMode::Splash:      return "splash";
+        case LightingMode::CpuLoad:     return "cpu";
+        case LightingMode::Memory:      return "memory";
+        case LightingMode::Thermal:     return "thermal";
+        case LightingMode::Network:     return "network";
+        case LightingMode::Clock:       return "clock";
+        case LightingMode::Indicators:  return "indicators";
     }
 
     return "custom";
@@ -164,8 +176,160 @@ LightingMode modeFromString(const std::string& s)
     if(s == "fireworks")   return LightingMode::Fireworks;
     if(s == "sweep")       return LightingMode::Sweep;
     if(s == "off")         return LightingMode::Off;
+    if(s == "aurora")      return LightingMode::Aurora;
+    if(s == "matrix")      return LightingMode::Matrix;
+    if(s == "gradient")    return LightingMode::Gradient;
+    if(s == "afterglow")   return LightingMode::Afterglow;
+    if(s == "splash")      return LightingMode::Splash;
+    if(s == "cpu")         return LightingMode::CpuLoad;
+    if(s == "memory")      return LightingMode::Memory;
+    if(s == "thermal")     return LightingMode::Thermal;
+    if(s == "network")     return LightingMode::Network;
+    if(s == "clock")       return LightingMode::Clock;
+    if(s == "indicators")  return LightingMode::Indicators;
 
     return LightingMode::Custom;
+}
+
+
+
+
+const char* blendToString(BlendMode b)
+{
+    switch(b)
+    {
+        case BlendMode::Normal:   return "normal";
+        case BlendMode::Add:      return "add";
+        case BlendMode::Lighten:  return "lighten";
+        case BlendMode::Multiply: return "multiply";
+    }
+
+    return "normal";
+}
+
+
+
+BlendMode blendFromString(const std::string& s)
+{
+    if(s == "add")      return BlendMode::Add;
+    if(s == "lighten")  return BlendMode::Lighten;
+    if(s == "multiply") return BlendMode::Multiply;
+
+    return BlendMode::Normal;
+}
+
+
+
+std::string maskToString(const std::vector<bool>& mask)
+{
+    if(mask.empty())
+        return "*";
+
+    std::string out(mask.size(), '0');
+    for(size_t i = 0; i < mask.size(); i++)
+        if(mask[i]) out[i] = '1';
+
+    return out;
+}
+
+
+
+std::vector<bool> maskFromString(const std::string& s, int keyCount)
+{
+    if(s.empty() || s == "*")
+        return {};
+
+    std::vector<bool> mask(keyCount, false);
+    for(int i = 0; i < keyCount && i < (int)s.size(); i++)
+        mask[i] = s[i] == '1';
+
+    return mask;
+}
+
+
+
+// effect|r,g,b|speed|opacity|blend|enabled|mask
+std::string layerToString(const Layer& layer)
+{
+    std::ostringstream ss;
+    ss << modeToString(layer.effect) << "|" << colorToString(layer.color) << "|"
+       << layer.speed << "|" << layer.opacity << "|" << blendToString(layer.blend) << "|"
+       << (layer.enabled ? "1" : "0") << "|" << maskToString(layer.mask);
+    return ss.str();
+}
+
+
+
+Layer layerFromString(const std::string& s, int keyCount)
+{
+    Layer layer;
+    auto parts = split(s, '|');
+
+    if(parts.size() > 0) layer.effect = modeFromString(parts[0]);
+    if(parts.size() > 1) layer.color = colorFromString(parts[1]);
+    if(parts.size() > 2) layer.speed = std::atof(parts[2].c_str());
+    if(parts.size() > 3) layer.opacity = std::atof(parts[3].c_str());
+    if(parts.size() > 4) layer.blend = blendFromString(parts[4]);
+    if(parts.size() > 5) layer.enabled = parts[5] != "0";
+    if(parts.size() > 6) layer.mask = maskFromString(parts[6], keyCount);
+
+    return layer;
+}
+
+
+
+std::vector<Layer> layersFromFields(const std::unordered_map<std::string, std::string>& fields, int keyCount)
+{
+    std::vector<Layer> layers;
+
+    auto countIt = fields.find("layers");
+    if(countIt == fields.end())
+        return layers;
+
+    int count = std::atoi(countIt->second.c_str());
+
+    for(int i = 0; i < count; i++)
+    {
+        auto it = fields.find("layer" + std::to_string(i));
+        if(it != fields.end())
+            layers.push_back(layerFromString(it->second, keyCount));
+    }
+
+    return layers;
+}
+
+
+
+void writeLayers(std::ostream& out, const std::vector<Layer>& layers)
+{
+    out << "layers=" << layers.size() << "\n";
+
+    for(size_t i = 0; i < layers.size(); i++)
+        out << "layer" << i << "=" << layerToString(layers[i]) << "\n";
+}
+
+
+
+std::vector<Layer> legacyLayers(LightingMode mode, const Color& activeColor, double speed)
+{
+    Layer base;
+    base.color = activeColor;
+    base.speed = speed;
+
+    // Old Breathing breathed the per-key design itself; the stack
+    // equivalent is that design with a white Breath multiplied over it.
+    if(mode == LightingMode::Breathing)
+    {
+        Layer breath;
+        breath.effect = LightingMode::Breathing;
+        breath.color = Color{255, 255, 255};
+        breath.speed = speed;
+        breath.blend = BlendMode::Multiply;
+        return { base, breath };
+    }
+
+    base.effect = mode;
+    return { base };
 }
 
 }

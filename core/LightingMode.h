@@ -24,5 +24,22 @@ enum class LightingMode
     Spiral,
     Fireworks,
     Sweep,
-    Off
+    Off,
+
+    // Ambient additions.
+    Aurora,
+    Matrix,
+    Gradient,
+
+    // Reactive: driven by real keystrokes (see SystemSignals::keyAge).
+    Afterglow,
+    Splash,
+
+    // System: driven by live machine metrics (see core/SystemMonitor.h).
+    CpuLoad,
+    Memory,
+    Thermal,
+    Network,
+    Clock,
+    Indicators
 };

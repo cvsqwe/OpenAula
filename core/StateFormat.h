@@ -2,9 +2,12 @@
 
 #include <string>
 #include <vector>
+#include <ostream>
+#include <unordered_map>
 
 #include "Color.h"
 #include "LightingMode.h"
+#include "Layer.h"
 
 
 // Small line/field serialisation helpers shared by AppState (the live,
@@ -35,5 +38,29 @@ std::vector<Color> colorsFromString(const std::string& s, int keyCount);
 const char* modeToString(LightingMode m);
 
 LightingMode modeFromString(const std::string& s);
+
+const char* blendToString(BlendMode b);
+
+BlendMode blendFromString(const std::string& s);
+
+// "*" for an every-key mask, else one '0'/'1' per visual key.
+std::string maskToString(const std::vector<bool>& mask);
+
+std::vector<bool> maskFromString(const std::string& s, int keyCount);
+
+std::string layerToString(const Layer& layer);
+
+Layer layerFromString(const std::string& s, int keyCount);
+
+// Reads the "layers=N" + "layer0=..".."layerN-1=.." fields shared by
+// state.conf and each profiles.conf block; empty if there are none.
+std::vector<Layer> layersFromFields(const std::unordered_map<std::string, std::string>& fields, int keyCount);
+
+void writeLayers(std::ostream& out, const std::vector<Layer>& layers);
+
+// The layer stack equivalent to a pre-layers config (single mode +
+// accent colour + speed), so old state/profile files keep looking the
+// same after an upgrade.
+std::vector<Layer> legacyLayers(LightingMode mode, const Color& activeColor, double speed);
 
 }

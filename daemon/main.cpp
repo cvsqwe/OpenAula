@@ -14,6 +14,8 @@
 #include "../core/KeyboardLayout.h"
 #include "../core/LightingMode.h"
 #include "../core/CalibrationSession.h"
+#include "../core/SystemMonitor.h"
+#include "KeyWatcher.h"
 
 #include <chrono>
 #include <thread>
@@ -58,9 +60,12 @@ std::vector<Color> toPhysical(const std::vector<Color>& visualFrame, const AppSt
     return physical;
 }
 
-bool isAnimatedMode(LightingMode mode)
+// Sleeps up to `ms`, waking early when SIGUSR1 asks for a reload so a
+// static design still updates instantly after an edit.
+void sleepUnlessNudged(int ms)
 {
-    return mode != LightingMode::Custom && mode != LightingMode::Off;
+    for(int slept = 0; slept < ms && running && !forceReload; slept += 20)
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
 }
 
 }
@@ -100,8 +105,18 @@ int main()
               << std::endl;
 
     auto lastStateCheck = std::chrono::steady_clock::now();
-    auto modeStart = lastStateCheck;
-    LightingMode lastMode = state.mode();
+    auto lastFrame = lastStateCheck;
+    auto lastSystemSample = lastStateCheck - std::chrono::seconds(10);
+
+    // Each layer's own animation clock, advanced by its speed every frame
+    // (rather than "elapsed * speed") so dragging a speed slider changes
+    // the pace smoothly instead of jumping the animation to a new phase.
+    std::vector<double> phases;
+
+    SystemSignals signals;
+    SystemMonitor monitor;
+    KeyWatcher keyWatcher((int)keys.size());
+    keyWatcher.start();
 
     CalibrationSession calib;
     calib.load();
@@ -116,12 +131,6 @@ int main()
             lastStateCheck = now;
             state.load((int)keys.size());
             calib.load();
-
-            if(state.mode() != lastMode)
-            {
-                lastMode = state.mode();
-                modeStart = now;
-            }
         }
 
         // While a calibration session (see the web app's Settings panel)
@@ -141,24 +150,48 @@ int main()
 
             controller.setColors(calibFrame);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(80));
+            sleepUnlessNudged(80);
+            lastFrame = std::chrono::steady_clock::now();
             continue;
         }
 
-        double elapsed = std::chrono::duration<double>(now - modeStart).count() * std::max(0.1, state.speed());
+        const std::vector<Layer>& layers = state.layers();
 
-        std::vector<Color> frame = LightingEngine::computeFrame(
-            state.mode(), elapsed, keys, state.customColorsRef(), state.activeColor()
+        bool animated = false, wantsMetrics = false;
+        for(const Layer& layer : layers)
+        {
+            if(!layer.enabled) continue;
+            animated = animated || LightingEngine::isAnimated(layer.effect);
+            wantsMetrics = wantsMetrics || LightingEngine::usesSystemMetrics(layer.effect);
+        }
+
+        double dt = std::min(0.25, std::chrono::duration<double>(now - lastFrame).count());
+        lastFrame = now;
+
+        phases.resize(layers.size(), 0.0);
+        for(size_t i = 0; i < layers.size(); i++)
+            phases[i] += dt * std::max(0.05, layers[i].speed);
+
+        if(wantsMetrics && now - lastSystemSample > std::chrono::milliseconds(500))
+        {
+            monitor.sample(signals);
+            lastSystemSample = now;
+        }
+
+        keyWatcher.snapshot(signals);
+
+        std::vector<Color> frame = LightingEngine::composite(
+            layers, phases, keys, state.customColorsRef(), signals
         );
 
         LightingEngine::applyBrightness(frame, state.brightness());
 
         controller.setColors(toPhysical(frame, state, TotalPhysicalLeds));
 
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(isAnimatedMode(state.mode()) ? 33 : 2000)
-        );
+        sleepUnlessNudged(animated ? 33 : 1000);
     }
+
+    keyWatcher.stop();
 
     std::cout << "openaula-daemon: stopping" << std::endl;
 

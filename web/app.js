@@ -11,8 +11,6 @@ const state = {
   calibration: null,
 };
 
-let wheelHue = 260, wheelSat = 0.64, wheelVal = 1.0;
-let wheelBase = null;
 
 // How long the user is considered "busy" (actively dragging/typing) after
 // the last interaction - the periodic state resync skips updates during
@@ -22,30 +20,59 @@ let lastInteractionAt = 0;
 function markBusy() { lastInteractionAt = Date.now(); }
 function isBusy() { return Date.now() - lastInteractionAt < BUSY_GRACE_MS; }
 
+// Every effect the engine knows (ids match core/StateFormat.cpp), grouped
+// the way the effect picker lists them. `color: false` marks effects with
+// their own fixed palette, where the layer colour does nothing.
+const EFFECT_GROUPS = ['Still', 'Ambient', 'Motion', 'Reactive', 'System'];
+
 const EFFECTS = [
-  { id: 'custom',      name: 'Custom',       desc: 'Your own per-key design',      css: 'linear-gradient(135deg,#7c5cff,#00d6ff)' },
-  { id: 'breathing',   name: 'Breathing',    desc: 'Fades in and out',             css: 'linear-gradient(135deg,#7c5cff,#241a52)' },
-  { id: 'colorcycle',  name: 'Colour Cycle', desc: 'Smooth hue rotation',          css: 'linear-gradient(90deg,#ff5470,#ffd23f,#2fd47a,#00d6ff,#7c5cff)' },
-  { id: 'bounce',      name: 'Bounce',       desc: 'Light bounces across keys',    css: 'linear-gradient(135deg,#00d6ff,#0a3a4a)' },
-  { id: 'wave',        name: 'Wave',         desc: 'Colour sweeps side to side',   css: 'linear-gradient(90deg,#00d6ff,#0d0e11,#00d6ff)' },
-  { id: 'ripple',      name: 'Ripple',       desc: 'Radiates out from a point',    css: 'radial-gradient(circle,#00d6ff,#0d0e11)' },
-  { id: 'starlight',   name: 'Starlight',    desc: 'Random keys twinkle',          css: 'radial-gradient(circle at 30% 30%,#fff,#7c5cff 45%,#0d0e11)' },
-  { id: 'raindrop',    name: 'Raindrop',     desc: 'Drops of colour fall & fade',  css: 'linear-gradient(180deg,#00d6ff,#0d0e11)' },
-  { id: 'comet',       name: 'Comet',        desc: 'A trail streaks across',       css: 'linear-gradient(120deg,#fff,#00d6ff,#0d0e11)' },
-  { id: 'fire',        name: 'Fire',         desc: 'Flickering embers',            css: 'linear-gradient(0deg,#ff5470,#ffb347,#ffd23f)' },
-  { id: 'rainbowwave', name: 'Rainbow Wave', desc: 'A rainbow sweeps across',      css: 'linear-gradient(90deg,#ff5470,#ffd23f,#2fd47a,#00d6ff,#7c5cff)' },
-  { id: 'heartbeat',   name: 'Heartbeat',    desc: 'Pulses like a heartbeat',      css: 'radial-gradient(circle,#ff5470,#3a0d1a)' },
-  { id: 'strobe',      name: 'Strobe',       desc: 'Sharp on/off flash',           css: 'linear-gradient(135deg,#fff,#0d0e11)' },
-  { id: 'alternating', name: 'Alternating',  desc: 'Checkerboard blink',           css: 'linear-gradient(45deg,#00d6ff 25%,#0d0e11 25%,#0d0e11 50%,#00d6ff 50%,#00d6ff 75%,#0d0e11 75%)' },
-  { id: 'confetti',    name: 'Confetti',     desc: 'Random keys flash random hues', css: 'radial-gradient(circle at 30% 30%,#ff5470,transparent 40%),radial-gradient(circle at 70% 60%,#2fd47a,transparent 40%),radial-gradient(circle at 40% 80%,#00d6ff,transparent 40%),#0d0e11' },
-  { id: 'snake',       name: 'Snake',        desc: 'A lit trail chases across',    css: 'linear-gradient(90deg,#0d0e11,#7c5cff,#00d6ff,#0d0e11)' },
-  { id: 'spiral',      name: 'Spiral',       desc: 'A rotating rainbow pinwheel',  css: 'conic-gradient(from 0deg,#ff5470,#ffd23f,#2fd47a,#00d6ff,#7c5cff,#ff5470)' },
-  { id: 'fireworks',   name: 'Fireworks',    desc: 'Rings burst from random spots', css: 'radial-gradient(circle at 35% 35%,#ffd23f,transparent 55%),radial-gradient(circle at 65% 65%,#ff5470,transparent 55%),#0d0e11' },
-  { id: 'sweep',       name: 'Sweep',        desc: 'A hard-edged colour wipe',      css: 'linear-gradient(120deg,#00d6ff 50%,#0d0e11 50%)' },
-  { id: 'off',         name: 'Off',          desc: 'Backlight disabled',           css: 'linear-gradient(135deg,#26272c,#0d0e11)' },
+  { id: 'custom',      group: 'Still',    name: 'Canvas',     desc: 'Your hand-painted keys', color: false },
+  { id: 'gradient',    group: 'Still',    name: 'Horizon',    desc: 'A soft gradient drawn from your colour' },
+  { id: 'off',         group: 'Still',    name: 'Blackout',   desc: 'Lights out on this layer', color: false },
+
+  { id: 'breathing',   group: 'Ambient',  name: 'Breath',     desc: 'Slow inhale, slow exhale' },
+  { id: 'aurora',      group: 'Ambient',  name: 'Aurora',     desc: 'Northern lights in your hue' },
+  { id: 'starlight',   group: 'Ambient',  name: 'Starfield',  desc: 'Keys twinkle at random' },
+  { id: 'heartbeat',   group: 'Ambient',  name: 'Pulse',      desc: 'A double heartbeat thump' },
+  { id: 'colorcycle',  group: 'Ambient',  name: 'Chroma',     desc: 'Every hue, drifting slowly', color: false },
+  { id: 'rainbowwave', group: 'Ambient',  name: 'Prism',      desc: 'A rainbow washing across', color: false },
+  { id: 'spiral',      group: 'Ambient',  name: 'Vortex',     desc: 'A turning rainbow pinwheel', color: false },
+  { id: 'fire',        group: 'Ambient',  name: 'Ember',      desc: 'Flickering firelight', color: false },
+
+  { id: 'wave',        group: 'Motion',   name: 'Tide',       desc: 'Light rolls side to side' },
+  { id: 'bounce',      group: 'Motion',   name: 'Pendulum',   desc: 'A beam swinging end to end' },
+  { id: 'ripple',      group: 'Motion',   name: 'Echo',       desc: 'Rings spreading from the centre' },
+  { id: 'raindrop',    group: 'Motion',   name: 'Rain',       desc: 'Drops fall and fade' },
+  { id: 'matrix',      group: 'Motion',   name: 'Cascade',    desc: 'Digital rain, column by column' },
+  { id: 'comet',       group: 'Motion',   name: 'Meteor',     desc: 'A bright streak with a tail' },
+  { id: 'snake',       group: 'Motion',   name: 'Serpent',    desc: 'A trail winding through every key' },
+  { id: 'sweep',       group: 'Motion',   name: 'Wipe',       desc: 'A hard-edged sweep' },
+  { id: 'alternating', group: 'Motion',   name: 'Checker',    desc: 'A blinking chessboard' },
+  { id: 'strobe',      group: 'Motion',   name: 'Flash',      desc: 'Sharp on / off strobe' },
+  { id: 'fireworks',   group: 'Motion',   name: 'Bloom',      desc: 'Bursts opening at random', color: false },
+  { id: 'confetti',    group: 'Motion',   name: 'Confetti',   desc: 'Random keys, random hues', color: false },
+
+  { id: 'afterglow',   group: 'Reactive', name: 'Afterglow',  desc: 'Keys glow where you type' },
+  { id: 'splash',      group: 'Reactive', name: 'Splash',     desc: 'Every keystroke sends a ripple' },
+  { id: 'indicators',  group: 'Reactive', name: 'Lock Light', desc: 'Caps Lock lights up while on' },
+
+  { id: 'cpu',         group: 'System',   name: 'Processor',  desc: 'CPU load as a level meter', color: false },
+  { id: 'memory',      group: 'System',   name: 'Memory',     desc: 'RAM use filling from the bottom' },
+  { id: 'thermal',     group: 'System',   name: 'Thermal',    desc: 'Cool blue to hot red with CPU heat', color: false },
+  { id: 'network',     group: 'System',   name: 'Traffic',    desc: 'Sparkles with network activity' },
+  { id: 'clock',       group: 'System',   name: 'Clock',      desc: 'F-keys show the hour, digits the minutes' },
 ];
 
-const PRESETS = ['#7c5cff', '#00d6ff', '#2fd47a', '#ffd23f', '#ff5470', '#ffffff'];
+const effectById = (id) => EFFECTS.find((e) => e.id === id) || EFFECTS[0];
+
+const BLENDS = [
+  { value: 'normal',   label: 'Cover' },
+  { value: 'add',      label: 'Add' },
+  { value: 'lighten',  label: 'Lighten' },
+  { value: 'multiply', label: 'Tint' },
+];
+
+const PRESETS = ['#7c5cff', '#00d6ff', '#2fd47a', '#ffd23f', '#ff5470', '#ff8a3d', '#ffffff'];
 
 
 // ---------- tiny helpers ----------
@@ -134,7 +161,7 @@ function rgbToHsv(r, g, b) {
 // on the real hardware instead of a static accent-colour tint.
 
 // h in [0,1) - matches LightingEngine.cpp's hsvColor(), NOT the 0-360
-// degree convention hsvToRgb() above uses for the colour wheel.
+// degree convention hsvToRgb() above uses for the colour picker.
 function hueToRgb01(h) {
   const sector = ((h % 1 + 1) % 1) * 6;
   const i = Math.floor(sector);
@@ -178,18 +205,38 @@ function scaleColorPreview(c, k) {
   return { r: c.r * k, g: c.g * k, b: c.b * k };
 }
 
+const BLACK = { r: 0, g: 0, b: 0 };
+const WHITE = { r: 255, g: 255, b: 255 };
+const NO_SIGNALS = { cpu: 0, memory: 0, temperature: 0, network: 0, hour: 0, minute: 0, second: 0, capsLock: false, keyAge: [] };
+
+function mod(a, m) { return ((a % m) + m) % m; }
+
+// h, s, v all 0..1 - LightingEngine.cpp's fromHsv().
+function hsv01(h, s, v) { return hsvToRgb(mod(h, 1) * 360, clamp(s, 0, 1), clamp(v, 0, 1)); }
+
+function shiftHue(c, shift) {
+  const hsv = rgbToHsv(c.r, c.g, c.b);
+  return hsvToRgb(hsv.h + shift * 360, hsv.s, hsv.v);
+}
+
+function mixColor(a, b, k) {
+  k = clamp(k, 0, 1);
+  return { r: a.r + (b.r - a.r) * k, g: a.g + (b.g - a.g) * k, b: a.b + (b.b - a.b) * k };
+}
+
 // t is already speed-scaled elapsed seconds, exactly like the `t` param
 // LightingEngine::computeFrame receives from daemon/main.cpp.
-function computePreviewFrame(mode, t, keys, baseColors, activeColor) {
+function computePreviewFrame(mode, t, keys, baseColors, activeColor, sys) {
   const n = keys.length;
   const frame = new Array(n);
+  sys = sys || NO_SIGNALS;
 
   const maxOf = (fn) => { let m = 0; for (const k of keys) m = Math.max(m, fn(k)); return m; };
 
   switch (mode) {
     case 'breathing': {
       const k = 0.1 + 0.9 * (Math.sin(t * 2.0) + 1.0) / 2.0;
-      for (let i = 0; i < n; i++) frame[i] = scaleColorPreview(baseColors[i] || { r: 24, g: 24, b: 28 }, k);
+      for (let i = 0; i < n; i++) frame[i] = scaleColorPreview(activeColor, k);
       return frame;
     }
     case 'colorcycle': {
@@ -398,10 +445,161 @@ function computePreviewFrame(mode, t, keys, baseColors, activeColor) {
       }
       return frame;
     }
+    case 'custom':
+      for (let i = 0; i < n; i++) frame[i] = baseColors[i] || BLACK;
+      return frame;
+    case 'off':
+      for (let i = 0; i < n; i++) frame[i] = BLACK;
+      return frame;
+    case 'aurora': {
+      for (let i = 0; i < n; i++) {
+        const x = keys[i].x + keys[i].w / 2, y = keys[i].y + keys[i].h / 2;
+        const v = Math.sin(x * 0.45 + t * 0.7) + Math.sin(y * 0.9 - t * 0.5) + Math.sin((x + y) * 0.3 + t * 0.35);
+        const k = (v + 3) / 6;
+        frame[i] = scaleColorPreview(shiftHue(activeColor, (k - 0.5) * 0.35), 0.3 + 0.7 * k);
+      }
+      return frame;
+    }
+    case 'matrix': {
+      const maxY = maxOf((k) => k.y + k.h);
+      for (let i = 0; i < n; i++) {
+        const colSeed = hash01(Math.round((keys[i].x + keys[i].w / 2) * 2), 59);
+        const period = 1.6 + colSeed * 1.6;
+        const localT = mod(t + colSeed * 17, period);
+        const headY = (localT / period) * (maxY + 5) - 1;
+        const d = headY - (keys[i].y + keys[i].h / 2);
+        if (d < 0 || d > 4) { frame[i] = BLACK; continue; }
+        const c = scaleColorPreview(activeColor, Math.pow(1 - d / 4, 1.6));
+        frame[i] = d < 0.7 ? mixColor(c, WHITE, 0.45) : c;
+      }
+      return frame;
+    }
+    case 'gradient': {
+      const maxX = maxOf((k) => k.x + k.w);
+      const drift = Math.sin(t * 0.3) * 0.06;
+      for (let i = 0; i < n; i++) {
+        const pos = (keys[i].x + keys[i].w / 2) / Math.max(1, maxX);
+        frame[i] = shiftHue(activeColor, pos * 0.33 + drift);
+      }
+      return frame;
+    }
+    case 'afterglow':
+      for (let i = 0; i < n; i++) {
+        const age = sys.keyAge[i] ?? 1e9;
+        frame[i] = scaleColorPreview(activeColor, age < 1.4 ? Math.pow(1 - age / 1.4, 2) : 0);
+      }
+      return frame;
+    case 'splash': {
+      const life = 1.1, speedUnits = 10, width = 1.3;
+      const live = [];
+      for (let j = 0; j < n; j++) {
+        const age = sys.keyAge[j] ?? 1e9;
+        if (age < life) live.push([keys[j].x + keys[j].w / 2, keys[j].y + keys[j].h / 2, age]);
+      }
+      for (let i = 0; i < n; i++) {
+        const kx = keys[i].x + keys[i].w / 2, ky = keys[i].y + keys[i].h / 2;
+        let best = 0;
+        for (const [ox, oy, age] of live) {
+          const dist = Math.hypot(kx - ox, ky - oy);
+          const ring = Math.max(0, 1 - Math.abs(dist - age * speedUnits) / width);
+          best = Math.max(best, ring * (1 - age / life));
+        }
+        frame[i] = scaleColorPreview(activeColor, best);
+      }
+      return frame;
+    }
+    case 'cpu': {
+      const maxX = maxOf((k) => k.x + k.w);
+      for (let i = 0; i < n; i++) {
+        const pos = (keys[i].x + keys[i].w / 2) / Math.max(1, maxX);
+        frame[i] = pos > sys.cpu ? BLACK : hsv01(0.33 * (1 - pos), 1, 1);
+      }
+      return frame;
+    }
+    case 'memory': {
+      const maxY = maxOf((k) => k.y + k.h);
+      for (let i = 0; i < n; i++) {
+        const fromBottom = 1 - (keys[i].y + keys[i].h / 2) / Math.max(1, maxY);
+        frame[i] = fromBottom <= sys.memory ? activeColor : BLACK;
+      }
+      return frame;
+    }
+    case 'thermal': {
+      const breathe = 0.8 + 0.2 * Math.sin(t * (1.5 + sys.temperature * 4));
+      const c = hsv01(0.62 * (1 - sys.temperature), 1, breathe);
+      for (let i = 0; i < n; i++) frame[i] = c;
+      return frame;
+    }
+    case 'network': {
+      const step = Math.floor(t * 8), within = t * 8 - step;
+      const chance = 0.03 + sys.network * 0.55;
+      for (let i = 0; i < n; i++) {
+        const b = hash01(keys[i].ledIndex, step * 31 + 7) < chance ? 1 - within : 0;
+        frame[i] = scaleColorPreview(activeColor, 0.06 + 0.94 * b);
+      }
+      return frame;
+    }
+    case 'clock': {
+      for (let i = 0; i < n; i++) frame[i] = BLACK;
+      const find = (label) => keys.findIndex((k) => k.label === label);
+      const dim = scaleColorPreview(activeColor, 0.08);
+      for (let f = 1; f <= 12; f++) { const k = find('F' + f); if (k >= 0) frame[k] = dim; }
+      const hour12 = sys.hour % 12 === 0 ? 12 : sys.hour % 12;
+      const hk = find('F' + hour12);
+      if (hk >= 0) frame[hk] = activeColor;
+      const tens = find(String(Math.floor(sys.minute / 10) % 10));
+      const units = find(String(sys.minute % 10));
+      if (tens >= 0) frame[tens] = activeColor;
+      if (units >= 0) frame[units] = units === tens ? WHITE : shiftHue(activeColor, 0.5);
+      const esc = find('Esc');
+      if (esc >= 0) frame[esc] = scaleColorPreview(activeColor, sys.second % 2 === 0 ? 0.9 : 0.15);
+      return frame;
+    }
+    case 'indicators': {
+      for (let i = 0; i < n; i++) frame[i] = BLACK;
+      const caps = keys.findIndex((k) => k.label === 'Caps');
+      if (caps >= 0 && sys.capsLock) frame[caps] = activeColor;
+      return frame;
+    }
     default:
       for (let i = 0; i < n; i++) frame[i] = activeColor;
       return frame;
   }
+}
+
+// JS twin of LightingEngine::composite() - renders the layer stack
+// bottom-to-top, each layer only on the keys in its mask.
+function compositeLayers(layers, phases, keys, baseColors, sys) {
+  const n = keys.length;
+  const acc = new Float32Array(n * 3);
+
+  layers.forEach((layer, li) => {
+    if (!layer.enabled || layer.effect === 'off') return;
+    const o = clamp(layer.opacity, 0, 1);
+    const src = computePreviewFrame(layer.effect, phases[li] || 0, keys, baseColors, layer.color, sys);
+    const mask = layer.mask;
+
+    for (let i = 0; i < n; i++) {
+      if (mask !== '*' && mask[i] !== '1') continue;
+      const sc = src[i];
+      const sv = [sc.r, sc.g, sc.b];
+      for (let c = 0; c < 3; c++) {
+        const d = acc[i * 3 + c], v = sv[c];
+        let out;
+        switch (layer.blend) {
+          case 'add':      out = Math.min(255, d + v * o); break;
+          case 'lighten':  out = d + (Math.max(d, v) - d) * o; break;
+          case 'multiply': out = d * (1 - o) + d * (v / 255) * o; break;
+          default:         out = d * (1 - o) + v * o;
+        }
+        acc[i * 3 + c] = out;
+      }
+    }
+  });
+
+  const frame = new Array(n);
+  for (let i = 0; i < n; i++) frame[i] = { r: acc[i * 3], g: acc[i * 3 + 1], b: acc[i * 3 + 2] };
+  return frame;
 }
 
 
@@ -476,6 +674,15 @@ function createDropdown(container, { renderOption, renderButton } = {}) {
   function open() {
     list.classList.add('open');
     container.classList.add('open');
+    // Flip upward when the list would run off the bottom of the window
+    // (the layer pickers live near the bottom of the dock).
+    list.classList.remove('up');
+    const r = container.getBoundingClientRect();
+    const needed = Math.min(list.scrollHeight, parseFloat(getComputedStyle(list).maxHeight) || 300) + 12;
+    if (window.innerHeight - r.bottom < needed && r.top > window.innerHeight - r.bottom) list.classList.add('up');
+
+    const sel = list.querySelector('.cdrop-option.selected');
+    if (sel) list.scrollTop = sel.offsetTop - list.clientHeight / 2 + sel.offsetHeight / 2;
     setTimeout(() => document.addEventListener('pointerdown', onDocPointer, true), 0);
   }
 
@@ -492,8 +699,19 @@ function createDropdown(container, { renderOption, renderButton } = {}) {
 
   function renderList() {
     list.innerHTML = '';
+    let lastGroup = null;
 
     items.forEach((item) => {
+      // Items carrying a `group` get a small heading whenever the group
+      // changes (the effect picker's Still / Ambient / Motion / ... ).
+      if (item.group && item.group !== lastGroup) {
+        const head = document.createElement('div');
+        head.className = 'cdrop-group';
+        head.textContent = item.group;
+        list.appendChild(head);
+        lastGroup = item.group;
+      }
+
       const opt = document.createElement('div');
       opt.className = 'cdrop-option' + (item.value === value ? ' selected' : '');
       opt.setAttribute('role', 'option');
@@ -538,32 +756,32 @@ function createDropdown(container, { renderOption, renderButton } = {}) {
 
 // ---------- nav ----------
 
-// Lighting / Macros & Remap / Settings are all permanently in the DOM now
-// (see index.html's .page-section elements) - there's no view to switch
-// to, so the rail just smooth-scrolls the already-visible section into
-// place, the same way it already did for the Profiles sidebar.
+// Lighting / Remap / Settings are separate views; the top-bar tabs swap
+// which one is visible. Only the active view is laid out, so the lighting
+// "stage" always gets the whole window to itself.
 function wireNav() {
   document.querySelectorAll('.rail-btn[data-section]').forEach((btn) => {
-    btn.addEventListener('click', () => scrollToSection(btn.dataset.section, btn));
+    btn.addEventListener('click', () => showView(btn.dataset.section));
   });
+
+  const fromHash = location.hash.slice(1);
+  if (fromHash && $(fromHash) && $(fromHash).classList.contains('view')) showView(fromHash);
 }
 
-function scrollToSection(id, activeBtn) {
+function showView(id) {
   document.querySelectorAll('.rail-btn[data-section]').forEach((b) => {
-    b.classList.toggle('active', b === activeBtn);
+    const on = b.dataset.section === id;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
 
-  const el = $(id);
-  if (!el) return;
+  history.replaceState(null, '', '#' + id);
 
-  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelectorAll('.view').forEach((v) => {
+    v.classList.toggle('active', v.id === id);
+  });
 
-  if (id === 'profilesSide') {
-    el.animate(
-      [{ boxShadow: '0 0 0 0 rgba(0,214,255,0)' }, { boxShadow: '0 0 0 2px rgba(0,214,255,.6) inset' }, { boxShadow: '0 0 0 0 rgba(0,214,255,0)' }],
-      { duration: 900 }
-    );
-  }
+  window.scrollTo({ top: 0 });
 }
 
 
@@ -629,160 +847,273 @@ const KEY_PIXEL_RECTS = [
   [931.5, 399.0, 995.0, 468.5], [995.0, 399.0, 1063.5, 468.5], [1063.5, 399.0, 1128.5, 468.5],
 ];
 
-function ensureGlowFilter(svg) {
-  if (svg.querySelector('#keyGlowBlur')) return;
-  const defs = document.createElementNS(SVGNS, 'defs');
-  defs.innerHTML =
-    '<filter id="keyGlowBlur" x="-80%" y="-80%" width="260%" height="260%">' +
-    '<feGaussianBlur stdDeviation="4"/>' +
-    '</filter>';
-  svg.appendChild(defs);
-}
-
 // One entry per layout key: cached DOM refs so painting a frame is just a
-// handful of attribute writes, not a full SVG rebuild - the animated
-// preview repaints every frame, so rebuilding the whole tree each time
-// would both be wasteful and reset hover/selection state constantly.
+// handful of attribute writes, not a full SVG rebuild.
 let keyElements = [];
-let selectedLedIndex = null;
-let animStart = performance.now();
 let rafHandle = null;
 
-function resetAnimationClock() {
-  animStart = performance.now();
+// Backlight is drawn the way a real board shows it, not as a coloured
+// sticker on each keycap: light shines through the legends and spills out
+// of the gaps under the caps, while the cap tops stay dark. Both regions
+// come from the photo itself (buildPhotoMasks): the legends are its bright
+// pixels, the gaps its near-black ones minus each cap's top face.
+//
+// Two SVGs sit over the photo:
+//   #kbLight (screen-blended) - gap underglow, legend bloom
+//   #kbSvg   (normal, on top) - the legends recoloured, hover/zone wash, hit targets
+
+// Inner "top face" of a key in photo pixels - the part of the cap that
+// stays dark when lit.
+function capTop(x0, y0, w, h) {
+  return [x0 + w * 0.16, y0 + h * 0.12, w * 0.68, h * 0.62];
 }
 
-// Builds the SVG once per layout load. Each key gets two stroked (never
-// filled) rings well inside its own bounds - a crisp one and a wider,
-// blurred one behind it for ambient bleed - plus a separate highlight
-// outline used only for hover/selection feedback. Two things this fixes
-// vs. earlier attempts:
-//   - insetting the rings (rather than stroking each key's *full* border)
-//     means two adjacent keys' rings never land on the same seam, so
-//     neither can double up on the other's stroke opacity there - that
-//     doubling-up was what made the very first version look uneven.
-//   - stroking (never filling) the ring means a key with the near-black
-//     "unset" default custom colour reads as a faint, thin edge rather
-//     than an opaque block covering the keycap - filling was what caused
-//     the solid black squares in the next attempt.
-function buildKeyboardDom() {
-  const svg = $('kbSvg');
-  svg.innerHTML = '';
-  svg.setAttribute('viewBox', `0 0 ${KB_PHOTO_W} ${KB_PHOTO_H}`);
-  ensureGlowFilter(svg);
+function buildPhotoMasks(img, rects) {
+  const w = KB_PHOTO_W, h = KB_PHOTO_H;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, w, h);
+  const src = ctx.getImageData(0, 0, w, h).data;
 
+  const legend = ctx.createImageData(w, h);
+  const gap = ctx.createImageData(w, h);
+
+  for (let p = 0, i = 0; p < src.length; p += 4, i++) {
+    const lum = 0.2126 * src[p] + 0.7152 * src[p + 1] + 0.0722 * src[p + 2];
+    const l = clamp((lum - 70) * 255 / 60, 0, 255);
+    const g = clamp((20 - lum) * 255 / 12, 0, 255);
+    legend.data[p] = legend.data[p + 1] = legend.data[p + 2] = l; legend.data[p + 3] = 255;
+    gap.data[p] = gap.data[p + 1] = gap.data[p + 2] = g; gap.data[p + 3] = 255;
+  }
+
+  const toUrl = (data, punchTops) => {
+    ctx.putImageData(data, 0, 0);
+    if (punchTops) {
+      ctx.fillStyle = '#000';
+      rects.forEach(([x0, y0, x1, y1]) => {
+        const [x, y, cw, ch] = capTop(x0, y0, x1 - x0, y1 - y0);
+        ctx.fillRect(x, y, cw, ch);
+      });
+    }
+    return canvas.toDataURL('image/png');
+  };
+
+  return { legend: toUrl(legend, false), gap: toUrl(gap, true) };
+}
+
+function svgEl(tag, attrs, cls) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (cls) el.classList.add(cls);
+  return el;
+}
+
+function maskDef(id, href) {
+  const mask = svgEl('mask', { id, maskUnits: 'userSpaceOnUse', x: 0, y: 0, width: KB_PHOTO_W, height: KB_PHOTO_H });
+  const image = svgEl('image', { x: 0, y: 0, width: KB_PHOTO_W, height: KB_PHOTO_H });
+  image.setAttribute('href', href);
+  mask.appendChild(image);
+  return mask;
+}
+
+async function buildKeyboardDom() {
+  const svg = $('kbSvg');
+  const light = $('kbLight');
+  svg.innerHTML = '';
+  light.innerHTML = '';
   keyElements = [];
 
   const layout = state.layout;
   if (!layout) return;
 
-  layout.keys.forEach((k) => {
-    const rect = KEY_PIXEL_RECTS[k.ledIndex] || [0, 0, 0, 0];
-    const [x0, y0, x1, y1] = rect;
+  const img = document.querySelector('.keyboard-photo img');
+  if (!img.complete) await new Promise((r) => img.addEventListener('load', r, { once: true }));
+
+  const rects = layout.keys.map((k) => KEY_PIXEL_RECTS[k.ledIndex] || [0, 0, 0, 0]);
+  const masks = buildPhotoMasks(img, rects);
+
+  for (const el of [svg, light]) el.setAttribute('viewBox', `0 0 ${KB_PHOTO_W} ${KB_PHOTO_H}`);
+
+  const defs = svgEl('defs', {});
+  defs.innerHTML =
+    '<filter id="kbUnderglow" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="1.8"/></filter>' +
+    '<filter id="kbBloom" x="-5%" y="-10%" width="110%" height="120%"><feGaussianBlur stdDeviation="2.6"/></filter>';
+  defs.appendChild(maskDef('kbGapMask', masks.gap));
+  defs.appendChild(maskDef('kbLegendMask', masks.legend));
+  light.appendChild(defs);
+
+  // #kbLight: underglow (blurred, then clipped to the gaps), bloom.
+  const glowOuter = svgEl('g', { mask: 'url(#kbGapMask)' }, 'key-underglow-layer');
+  const glowInner = svgEl('g', { filter: 'url(#kbUnderglow)' });
+  glowOuter.appendChild(glowInner);
+  const bloomOuter = svgEl('g', { filter: 'url(#kbBloom)' }, 'key-bloom-layer');
+  const bloomInner = svgEl('g', { mask: 'url(#kbLegendMask)' });
+  bloomOuter.appendChild(bloomInner);
+  light.appendChild(glowOuter);
+  light.appendChild(bloomOuter);
+
+  // #kbSvg: recoloured legends, then per-key wash + hit target.
+  const legendGroup = svgEl('g', { mask: 'url(#kbLegendMask)' });
+  svg.appendChild(legendGroup);
+  const keyGroup = svgEl('g', {});
+  svg.appendChild(keyGroup);
+
+  layout.keys.forEach((k, i) => {
+    const [x0, y0, x1, y1] = rects[i];
     const w = x1 - x0, h = y1 - y0;
+    const [tx, ty, tw, th] = capTop(x0, y0, w, h);
 
-    const group = document.createElementNS(SVGNS, 'g');
-    group.classList.add('key-group');
+    // A thin ring on the key's outer edge - where it meets its
+    // neighbours - rather than a filled block, so only a narrow line of
+    // light escapes at the base of the cap instead of its whole side.
+    const glow = svgEl('rect', { x: x0 + 2, y: y0 + 2, width: w - 4, height: h - 4, rx: 8, fill: 'none', 'stroke-width': 4 });
+    glowInner.appendChild(glow);
 
-    // Invisible full-key hit target - handles clicks/hover, never itself
-    // painted, so the photo's own keycap stays fully visible. Always
-    // clickable now, regardless of mode: clicking a key while a
-    // non-Custom effect is active switches into Custom automatically
-    // (see openKeyPopover) rather than silently doing nothing.
-    const hit = document.createElementNS(SVGNS, 'rect');
-    hit.setAttribute('x', x0); hit.setAttribute('y', y0);
-    hit.setAttribute('width', w); hit.setAttribute('height', h);
-    hit.classList.add('key-hit', 'editable');
-    hit.addEventListener('click', (ev) => onKeyClick(ev, k, group));
-    hit.addEventListener('mouseenter', () => group.classList.add('hover'));
-    hit.addEventListener('mouseleave', () => group.classList.remove('hover'));
+    const bloom = svgEl('rect', { x: x0, y: y0, width: w, height: h });
+    bloomInner.appendChild(bloom);
 
-    // Wider, blurred ring (ambient bleed) - inset a bit less than the
-    // crisp ring so its blur has room to spread without ever reaching
-    // the neighbouring key's own inset area.
-    const insetBlur = { x: w * 0.18, y: h * 0.20 };
-    const blur = document.createElementNS(SVGNS, 'rect');
-    blur.setAttribute('x', x0 + insetBlur.x); blur.setAttribute('y', y0 + insetBlur.y);
-    blur.setAttribute('width', Math.max(0, w - insetBlur.x * 2));
-    blur.setAttribute('height', Math.max(0, h - insetBlur.y * 2));
-    blur.setAttribute('rx', 4);
-    blur.classList.add('key-glow-blur');
-    blur.setAttribute('filter', 'url(#keyGlowBlur)');
+    const legend = svgEl('rect', { x: x0, y: y0, width: w, height: h });
+    legendGroup.appendChild(legend);
 
-    // Crisp inner ring - the actual per-key colour reads clearly here.
-    const insetRing = { x: w * 0.27, y: h * 0.29 };
-    const ring = document.createElementNS(SVGNS, 'rect');
-    ring.setAttribute('x', x0 + insetRing.x); ring.setAttribute('y', y0 + insetRing.y);
-    ring.setAttribute('width', Math.max(0, w - insetRing.x * 2));
-    ring.setAttribute('height', Math.max(0, h - insetRing.y * 2));
-    ring.setAttribute('rx', 3);
-    ring.classList.add('key-glow');
-
-    const highlight = document.createElementNS(SVGNS, 'rect');
-    highlight.setAttribute('x', x0 + insetRing.x); highlight.setAttribute('y', y0 + insetRing.y);
-    highlight.setAttribute('width', Math.max(0, w - insetRing.x * 2));
-    highlight.setAttribute('height', Math.max(0, h - insetRing.y * 2));
-    highlight.setAttribute('rx', 3);
-    highlight.classList.add('key-highlight');
-
+    const group = svgEl('g', {}, 'key-group');
+    group.appendChild(svgEl('rect', { x: tx, y: ty, width: tw, height: th, rx: 6 }, 'key-wash'));
+    const hit = svgEl('rect', { x: x0, y: y0, width: w, height: h }, 'key-hit');
+    hit.dataset.index = i;
     group.appendChild(hit);
-    group.appendChild(blur);
-    group.appendChild(ring);
-    group.appendChild(highlight);
-    svg.appendChild(group);
+    keyGroup.appendChild(group);
 
-    keyElements.push({ key: k, group, blur, ring });
+    keyElements.push({ key: k, group, glow, bloom, legend });
   });
 
-  $('keyboardHint').textContent = 'Click any key to paint it and switch to the Custom effect.';
+  wireKeyboardPointer(svg);
+  updateToolUI();
 }
 
-// Runs every animation frame (and on demand after any state change) -
-// computes this instant's colour for every key and writes it straight to
-// the cached DOM elements from buildKeyboardDom(). Custom mode is static
-// (just the saved per-key design); Off hides everything; every other mode
-// is animated live via computePreviewFrame(), the JS port of
-// core/LightingEngine.cpp, so the preview shows the same motion the
-// daemon drives on the real hardware instead of a flat accent tint.
+
+// ---------- live signals for reactive / system previews ----------
+
+// Browser-side stand-ins for what the daemon reads from the real machine:
+// key presses come from this page's own keydown events (so typing here
+// previews Afterglow/Splash), metrics from /api/system.
+const signals = { ...NO_SIGNALS, keyAge: [] };
+let keyPressAt = [];
+
+// KeyboardEvent.code for each visual key, in buildF75Layout() order.
+const KEY_EVENT_CODES = [
+  'Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
+  'Backquote', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
+  'Minus', 'Equal', 'Backspace', 'Delete',
+  'Tab', 'KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO', 'KeyP',
+  'BracketLeft', 'BracketRight', 'Backslash', 'PageUp',
+  'CapsLock', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK', 'KeyL',
+  'Semicolon', 'Quote', 'Enter', 'PageDown',
+  'ShiftLeft', 'KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM',
+  'Comma', 'Period', 'Slash', 'ShiftRight', 'ArrowUp', 'End',
+  'ControlLeft', 'MetaLeft', 'AltLeft', 'Space', 'Fn', 'ControlRight', 'ArrowLeft', 'ArrowDown', 'ArrowRight',
+];
+
+function wireKeySignals() {
+  document.addEventListener('keydown', (ev) => {
+    signals.capsLock = ev.getModifierState && ev.getModifierState('CapsLock');
+    const i = KEY_EVENT_CODES.indexOf(ev.code);
+    if (i >= 0) keyPressAt[i] = performance.now();
+  });
+  document.addEventListener('keyup', (ev) => {
+    signals.capsLock = ev.getModifierState && ev.getModifierState('CapsLock');
+  });
+}
+
+function layersUse(test) {
+  return layers.some((l) => l.enabled && test(l.effect));
+}
+
+const SYSTEM_EFFECTS = new Set(['cpu', 'memory', 'thermal', 'network']);
+
+async function pollSystemSignals() {
+  if (!layersUse((e) => SYSTEM_EFFECTS.has(e))) return;
+  try {
+    Object.assign(signals, await apiGet('/api/system'));
+  } catch (e) {
+    // preview just keeps the last numbers
+  }
+}
+
+function currentSignals(now) {
+  const n = keyElements.length;
+  if (signals.keyAge.length !== n) signals.keyAge = new Array(n);
+  for (let i = 0; i < n; i++) {
+    signals.keyAge[i] = keyPressAt[i] === undefined ? 1e9 : (now - keyPressAt[i]) / 1000;
+  }
+  const d = new Date();
+  signals.hour = d.getHours(); signals.minute = d.getMinutes(); signals.second = d.getSeconds();
+  return signals;
+}
+
+
+// ---------- rendering ----------
+
+// Legend colour of a key that isn't lit - close to the photo's own.
+const UNLIT_LEGEND = { r: 118, g: 118, b: 124 };
+
+let phases = [];
+let lastFrameAt = performance.now();
+let frameCount = 0;
+
+function resetAnimationClock() {
+  phases = [];
+}
+
+// Runs every animation frame: advances each layer's clock by its own
+// speed (same as daemon/main.cpp), composites the stack, and writes the
+// colours straight onto the cached key elements.
 function paintKeyboard() {
-  if (!keyElements.length) return;
+  if (!keyElements.length || !state.appState) return;
+
+  const now = performance.now();
+  const dt = Math.min(0.25, (now - lastFrameAt) / 1000);
+  lastFrameAt = now;
+
+  if (phases.length !== layers.length) phases.length = layers.length;
+  for (let i = 0; i < layers.length; i++) phases[i] = (phases[i] || 0) + dt * Math.max(0.05, layers[i].speed);
 
   const s = state.appState;
-  const mode = s ? s.mode : 'custom';
-  const brightness = s ? s.brightness : 1;
-  const accent = s ? s.activeColor : { r: 124, g: 92, b: 255 };
-  const customColors = s ? s.customColors : [];
-  const backlightOff = mode === 'off';
+  const frame = compositeLayers(layers, phases, state.layout.keys, s.customColors || [], currentSignals(now));
+  const brightness = s.brightness;
+  const zone = tool === 'zone' ? layers[selectedLayer] : null;
 
-  let colors = null;
-  if (!backlightOff && mode !== 'custom') {
-    const t = (performance.now() - animStart) / 1000 * (s ? s.speed : 1);
-    colors = computePreviewFrame(mode, t, state.layout.keys, customColors, accent);
-  }
+  let sr = 0, sg = 0, sb = 0;
 
-  keyElements.forEach(({ key: k, group, blur, ring }, i) => {
-    group.classList.toggle('selected', k.ledIndex === selectedLedIndex);
+  keyElements.forEach(({ group, glow, bloom, legend }, i) => {
+    let c = scaleColor(frame[i], brightness);
+    sr += c.r; sg += c.g; sb += c.b;
 
-    if (backlightOff) {
-      blur.setAttribute('stroke', 'none');
-      ring.setAttribute('stroke', 'none');
-      return;
+    if (zone) {
+      const inZone = zone.mask === '*' || zone.mask[i] === '1';
+      group.classList.toggle('in-zone', inZone);
+      if (!inZone) c = scaleColor(c, 0.22);
     }
 
-    const raw = mode === 'custom'
-      ? (customColors[k.ledIndex] || { r: 24, g: 24, b: 28 })
-      : colors[i];
-    const c = scaleColor(raw, brightness);
     const hex = rgbToHex(c);
+    glow.setAttribute('stroke', hex);
+    bloom.setAttribute('fill', hex);
 
-    ring.setAttribute('stroke', hex);
-    ring.setAttribute('stroke-width', 2.5);
-    ring.setAttribute('stroke-opacity', 0.95);
-
-    blur.setAttribute('stroke', hex);
-    blur.setAttribute('stroke-width', 7);
-    blur.setAttribute('stroke-opacity', 0.55);
+    // A lit legend glows in the key's colour (pushed a little towards
+    // white at full power, like a real LED behind translucent plastic);
+    // an unlit one keeps the photo's own pale grey.
+    const level = Math.max(c.r, c.g, c.b) / 255;
+    const lit = level > 0 ? mixColor(scaleColor(c, 1 / level), WHITE, 0.28 * level) : UNLIT_LEGEND;
+    legend.setAttribute('fill', rgbToHex(mixColor(UNLIT_LEGEND, lit, Math.min(1, level * 2))));
   });
+
+  // The stage's ambient glow follows what the board is actually showing.
+  if (++frameCount % 8 === 0) {
+    const n = keyElements.length;
+    const avg = { r: sr / n, g: sg / n, b: sb / n };
+    const peak = Math.max(avg.r, avg.g, avg.b, 1);
+    document.documentElement.style.setProperty('--live', rgbToHex(scaleColor(avg, Math.min(3, 200 / peak))));
+    document.documentElement.style.setProperty('--live-strength', String(clamp(peak / 120, 0.15, 1)));
+  }
 }
 
 function startAnimationLoop() {
@@ -796,153 +1127,504 @@ function startAnimationLoop() {
   rafHandle = requestAnimationFrame(tick);
 }
 
-// Kept as the name the rest of the file calls after any state-changing
-// action - now just triggers an immediate repaint rather than a full SVG
-// rebuild, since buildKeyboardDom() only needs to run once per layout.
 function renderKeyboard() {
   paintKeyboard();
 }
 
-// Only one popover can be open at a time - tracked here so opening a new
-// key's popover always tears down the previous key's document-level
-// listener instead of leaving it stacked up (each click used to leak one).
-let closePopoverListener = null;
 
-function closeKeyPopover() {
-  $('keyPopover').classList.remove('show');
-  if (closePopoverListener) {
-    document.removeEventListener('pointerdown', closePopoverListener, true);
-    closePopoverListener = null;
-  }
-  selectedLedIndex = null;
+// ---------- keyboard tools: paint / layer keys ----------
+
+let tool = 'paint';
+let brush = { r: 255, g: 255, b: 255 };
+let erasing = false;
+let stroke = null;   // { kind: 'paint' | 'zone', value, touched:Set }
+
+// Quick key sets for the "Layer keys" tool, by layout label.
+const ZONES = [
+  { id: 'all', label: 'All' },
+  { id: 'none', label: 'None' },
+  { id: 'invert', label: 'Invert' },
+  { id: 'letters', label: 'Letters', labels: 'QWERTYUIOPASDFGHJKLZXCVBNM'.split('') },
+  { id: 'numbers', label: 'Numbers', labels: '`1234567890-='.split('') },
+  { id: 'frow', label: 'F-row', labels: ['Esc', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'] },
+  { id: 'wasd', label: 'WASD', labels: ['W', 'A', 'S', 'D'] },
+  { id: 'arrows', label: 'Arrows', labels: ['Up', 'Down', 'Left', 'Right'] },
+  { id: 'mods', label: 'Modifiers', labels: ['Tab', 'Caps', 'Shift', 'Ctrl', 'Win', 'Alt', 'Fn', 'Space', 'Enter', 'Backspace'] },
+  { id: 'nav', label: 'Nav', labels: ['Delete', 'PgUp', 'PgDn', 'End'] },
+];
+
+function maskHas(mask, i) { return mask === '*' || mask[i] === '1'; }
+
+function maskSet(mask, i, on) {
+  const n = keyElements.length;
+  const arr = mask === '*' ? new Array(n).fill('1') : mask.padEnd(n, '0').split('');
+  arr[i] = on ? '1' : '0';
+  const out = arr.join('');
+  return out.indexOf('0') === -1 ? '*' : out;
 }
 
-// Every key click goes through here first: during a calibration session
-// (see the Settings panel) a click means "this is the key that just lit
-// up", not "edit this key's colour" - the wizard hijacks the same keyboard
-// preview rather than drawing a second one.
-function onKeyClick(ev, key, group) {
-  if (state.calibration && state.calibration.active) {
-    handleCalibrationKeyClick(key);
-    return;
-  }
-
-  openKeyPopover(ev, key, group);
+function maskCount(mask) {
+  if (mask === '*') return keyElements.length || 80;
+  let c = 0;
+  for (const ch of mask) if (ch === '1') c++;
+  return c;
 }
 
-// Clicking any key edits its colour, same as any other per-key RGB
-// software - it's not gated behind first manually selecting the Custom
-// effect. If a different effect is currently active, the first click
-// switches into Custom (seeding it from whatever the animation currently
-// shows for that key, so the switch doesn't visually jump) and then opens
-// the popover exactly as if Custom had already been selected.
-async function openKeyPopover(ev, key, group) {
-  closeKeyPopover();
+function applyZone(id) {
+  const layer = layers[selectedLayer];
+  if (!layer) return;
+  const n = keyElements.length;
+  const keys = state.layout.keys;
+
+  if (id === 'all') layer.mask = '*';
+  else if (id === 'none') layer.mask = '0'.repeat(n);
+  else if (id === 'invert') {
+    let out = '';
+    for (let i = 0; i < n; i++) out += maskHas(layer.mask, i) ? '0' : '1';
+    layer.mask = out.indexOf('0') === -1 ? '*' : out;
+  } else {
+    const zone = ZONES.find((z) => z.id === id);
+    let out = '';
+    for (let i = 0; i < n; i++) out += zone.labels.includes(keys[i].label) ? '1' : '0';
+    layer.mask = out;
+  }
+
   markBusy();
+  renderLayers();
+  updateToolUI();
+  pushLayers();
+}
 
-  selectedLedIndex = key.ledIndex;
-  if (group) group.classList.add('selected');
+// Topmost Canvas layer (where brush strokes land), creating one on top of
+// the stack - covering no keys yet - if there isn't one. Painting a key
+// adds it to that layer's mask, so paint always shows over the effects
+// below; erasing removes it again and reveals them.
+function canvasLayerIndex() {
+  for (let i = layers.length - 1; i >= 0; i--) {
+    if (layers[i].effect === 'custom') return i;
+  }
+  layers.push(newLayer('custom', { mask: '0'.repeat(keyElements.length) }));
+  toast('Added a Canvas layer for your paint');
+  return layers.length - 1;
+}
 
-  if (state.appState && state.appState.mode !== 'custom') {
-    try {
-      const res = await apiPost('/api/mode', { mode: 'custom' });
-      state.appState = res;
-      resetAnimationClock();
-      highlightActiveEffect();
-      renderKeyboard();
-    } catch (e) {
-      toast('Could not reach openaula-webd');
+function paintKey(i) {
+  const li = canvasLayerIndex();
+  const layer = layers[li];
+  layer.enabled = true;
+
+  if (erasing) {
+    layer.mask = maskSet(layer.mask, i, false);
+  } else {
+    state.appState.customColors[i] = { ...brush };
+    layer.mask = maskSet(layer.mask, i, true);
+  }
+}
+
+function keyIndexAt(ev) {
+  const el = document.elementFromPoint(ev.clientX, ev.clientY);
+  return el && el.classList.contains('key-hit') ? Number(el.dataset.index) : -1;
+}
+
+function applyStroke(i) {
+  if (i < 0 || !stroke || stroke.touched.has(i)) return;
+  stroke.touched.add(i);
+
+  if (stroke.kind === 'paint') {
+    paintKey(i);
+  } else {
+    const layer = layers[selectedLayer];
+    if (layer) layer.mask = maskSet(layer.mask, i, stroke.value);
+  }
+  markBusy();
+}
+
+function wireKeyboardPointer(svg) {
+  svg.addEventListener('pointerdown', (ev) => {
+    const i = keyIndexAt(ev);
+    if (i < 0) return;
+    ev.preventDefault();
+
+    const key = state.layout.keys[i];
+
+    if (state.calibration && state.calibration.active) {
+      handleCalibrationKeyClick(key);
       return;
     }
-  }
 
-  const pop = $('keyPopover');
-  const input = $('keyColorInput');
-  const current = (state.appState.customColors[key.ledIndex]) || { r: 24, g: 24, b: 28 };
-
-  input.value = rgbToHex(current);
-  $('keyPopoverLabel').textContent = key.label;
-
-  // Default to opening below the key; flip above it if there isn't room
-  // (bottom-row keys would otherwise render the popover off-screen).
-  const rect = ev.currentTarget.getBoundingClientRect();
-  const popW = 150, popH = 60;
-  const left = clamp(rect.left, 8, window.innerWidth - popW - 8);
-  const openBelow = rect.bottom + 8 + popH <= window.innerHeight;
-  const top = openBelow ? rect.bottom + 8 : rect.top - popH - 8;
-
-  pop.style.left = left + 'px';
-  pop.style.top = Math.max(8, top) + 'px';
-  pop.classList.add('show');
-
-  const commit = debounce(async (hex) => {
-    markBusy();
-    const rgb = hexToRgb(hex);
-    const res = await apiPost('/api/custom-color', { index: key.ledIndex, ...rgb });
-    state.appState = res;
-    renderKeyboard();
-  }, 60);
-
-  input.oninput = () => { markBusy(); commit(input.value); };
-
-  closePopoverListener = (e) => {
-    if (!pop.contains(e.target) && e.target !== ev.currentTarget) {
-      closeKeyPopover();
+    // Alt-click: eyedropper - take that key's painted colour as the brush.
+    if (ev.altKey) {
+      const c = state.appState.customColors[i];
+      if (c) setBrush(c);
+      return;
     }
+
+    if (tool === 'paint') {
+      stroke = { kind: 'paint', touched: new Set() };
+    } else {
+      const layer = layers[selectedLayer];
+      if (!layer) return;
+      stroke = { kind: 'zone', value: !maskHas(layer.mask, i), touched: new Set() };
+    }
+
+    svg.setPointerCapture(ev.pointerId);
+    applyStroke(i);
+  });
+
+  svg.addEventListener('pointermove', (ev) => {
+    const i = keyIndexAt(ev);
+    keyElements.forEach((k, idx) => k.group.classList.toggle('hover', idx === i));
+    if (stroke) applyStroke(i);
+  });
+
+  svg.addEventListener('pointerleave', () => {
+    keyElements.forEach((k) => k.group.classList.remove('hover'));
+  });
+
+  const end = () => {
+    if (!stroke) return;
+    const wasPaint = stroke.kind === 'paint';
+    stroke = null;
+    renderLayers();
+    updateToolUI();
+    pushLayers(wasPaint);
   };
 
-  setTimeout(() => document.addEventListener('pointerdown', closePopoverListener, true), 0);
+  svg.addEventListener('pointerup', end);
+  svg.addEventListener('pointercancel', end);
 }
 
-
-// ---------- effect dropdown ----------
-
-let effectDropdown = null;
-
-function renderEffectOption(el, fx) {
-  const swatch = document.createElement('span');
-  swatch.className = 'cdrop-swatch';
-  swatch.style.background = fx.css;
-  el.appendChild(swatch);
-
-  const label = document.createElement('span');
-  label.textContent = fx.name;
-  el.appendChild(label);
+function setBrush(c) {
+  brush = { r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b) };
+  erasing = false;
+  updateToolUI();
 }
 
-function buildEffectSelect() {
-  effectDropdown = createDropdown($('effectDropdown'), {
-    renderOption: (el, item) => renderEffectOption(el, item.fx),
-    renderButton: (el, item) => { if (item) renderEffectOption(el, item.fx); },
+function setTool(t) {
+  tool = t;
+  updateToolUI();
+}
+
+function updateToolUI() {
+  document.querySelectorAll('#toolSeg [data-tool]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tool === tool);
   });
 
-  effectDropdown.setOptions(EFFECTS.map((fx) => ({ value: fx.id, label: fx.name, fx })));
+  $('paintPanel').hidden = tool !== 'paint';
+  $('zonePanel').hidden = tool !== 'zone';
+  $('kbSvg').classList.toggle('tool-zone', tool === 'zone');
 
-  effectDropdown.onChange(async (mode) => {
-    const fx = EFFECTS.find((e) => e.id === mode);
-    updateEffectPreview();
-    try {
-      const res = await apiPost('/api/mode', { mode });
-      state.appState = res;
-      resetAnimationClock();
-      renderKeyboard();
-      toast(fx.name + ' applied');
-    } catch (e) {
-      toast('Could not reach openaula-webd');
-    }
+  const hex = rgbToHex(brush);
+  $('brushSwatch').style.background = hex;
+  $('brushHex').textContent = hex.toUpperCase();
+  $('eraseBtn').classList.toggle('active', erasing);
+  $('brushSwatch').classList.toggle('erasing', erasing);
+
+  const layer = layers[selectedLayer];
+  $('zoneInfo').innerHTML = layer
+    ? `<strong>${effectById(layer.effect).name}</strong> · ${maskCount(layer.mask)} keys`
+    : 'No layer selected';
+
+  $('keyboardHint').textContent = tool === 'paint'
+    ? 'Click or drag across keys to paint them · Alt-click picks a key’s colour'
+    : 'Click or drag to choose which keys the selected layer covers';
+}
+
+function wireTools() {
+  document.querySelectorAll('#toolSeg [data-tool]').forEach((b) => {
+    b.addEventListener('click', () => setTool(b.dataset.tool));
+  });
+
+  // The brush swatch opens the same picker the inspector uses, in a popover.
+  const pop = $('brushPop');
+  const brushPicker = createColorPicker($('brushPicker'), (rgb) => setBrush(rgb));
+  const closePop = (ev) => {
+    if (ev && (pop.contains(ev.target) || $('brushSwatchBtn').contains(ev.target))) return;
+    pop.hidden = true;
+    document.removeEventListener('pointerdown', closePop, true);
+  };
+  $('brushSwatchBtn').addEventListener('click', () => {
+    if (!pop.hidden) { closePop(); return; }
+    brushPicker.set(brush);
+    pop.hidden = false;
+    document.addEventListener('pointerdown', closePop, true);
+  });
+  pop.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { closePop(); $('brushSwatchBtn').focus(); } });
+
+  const presets = $('brushPresets');
+  PRESETS.forEach((hex) => {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'preset-swatch';
+    dot.style.background = hex;
+    dot.title = hex;
+    dot.addEventListener('click', () => setBrush(hexToRgb(hex)));
+    presets.appendChild(dot);
+  });
+
+  $('eraseBtn').addEventListener('click', () => { erasing = !erasing; updateToolUI(); });
+
+  const chips = $('zoneChips');
+  ZONES.forEach((z) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'zone-chip';
+    b.textContent = z.label;
+    b.addEventListener('click', () => applyZone(z.id));
+    chips.appendChild(b);
   });
 }
 
-function updateEffectPreview() {
-  const mode = effectDropdown.getValue();
-  const fx = EFFECTS.find((e) => e.id === mode) || EFFECTS[0];
-  $('effectDescText').textContent = fx.desc;
+
+// ---------- layers ----------
+
+// Working copy of the stack (same shape as /api/state's `layers`), edited
+// locally and pushed back debounced - index 0 is the bottom layer.
+let layers = [];
+let selectedLayer = 0;
+
+function newLayer(effect, extra) {
+  return {
+    effect,
+    color: { r: 124, g: 92, b: 255 },
+    speed: 1,
+    opacity: 1,
+    blend: 'normal',
+    enabled: true,
+    mask: '*',
+    ...extra,
+  };
 }
 
-function highlightActiveEffect() {
-  const mode = state.appState ? state.appState.mode : 'custom';
-  effectDropdown.setValue(mode);
-  updateEffectPreview();
+function syncLayersFromState() {
+  const src = (state.appState && state.appState.layers) || [];
+  layers = src.map((l) => ({ ...l, color: { ...l.color } }));
+  selectedLayer = clamp(selectedLayer, 0, Math.max(0, layers.length - 1));
+}
+
+const pushLayers = (() => {
+  let timer = null;
+  let withColors = false;
+
+  return (includeColors) => {
+    withColors = withColors || !!includeColors;
+    markBusy();
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const body = { layers };
+      if (withColors) body.customColors = state.appState.customColors;
+      withColors = false;
+      try {
+        const res = await apiPost('/api/layers', body);
+        // Keep the local stack: it may already be newer than this reply.
+        state.appState = { ...res, layers };
+      } catch (e) {
+        toast('Could not reach openaula-webd');
+      }
+    }, 140);
+  };
+})();
+
+function effectItems() {
+  return EFFECTS.map((fx) => ({ value: fx.id, label: fx.name, group: fx.group, fx }));
+}
+
+function renderEffectOption(el, item) {
+  const name = document.createElement('span');
+  name.className = 'fx-name';
+  name.textContent = item.fx.name;
+  el.appendChild(name);
+
+  const desc = document.createElement('span');
+  desc.className = 'fx-desc';
+  desc.textContent = item.fx.desc;
+  el.appendChild(desc);
+}
+
+const ICON_EYE = '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>';
+const ICON_EYE_OFF = '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 3l18 18M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A16.6 16.6 0 0 0 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+const ICON_UP = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_PEN = '<svg viewBox="0 0 24 24" width="13" height="13"><path d="M14.5 4.5l5 5L9 20H4v-5L14.5 4.5Z" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+const ICON_X = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+function iconButton(svg, title, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'layer-icon';
+  b.title = title;
+  b.innerHTML = svg;
+  b.addEventListener('click', (ev) => { ev.stopPropagation(); onClick(); });
+  return b;
+}
+
+// Only restyles the existing rows (no rebuild), so a click that both
+// selects a row and opens its effect picker keeps the picker open.
+function selectLayer(i) {
+  selectedLayer = i;
+  document.querySelectorAll('#layerList .layer-row').forEach((row) => {
+    row.classList.toggle('selected', Number(row.dataset.index) === i);
+  });
+  renderBlend();
+  $('effectDescText').textContent = layers[i] ? effectById(layers[i].effect).desc : '';
+  loadSelectedLayerIntoControls();
+  updateToolUI();
+}
+
+function moveLayer(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= layers.length) return;
+  [layers[i], layers[j]] = [layers[j], layers[i]];
+  [phases[i], phases[j]] = [phases[j], phases[i]];
+  selectedLayer = j;
+  renderLayers();
+  pushLayers();
+}
+
+function removeLayer(i) {
+  if (layers.length <= 1) { toast('Keep at least one layer'); return; }
+  layers.splice(i, 1);
+  phases.splice(i, 1);
+  selectedLayer = clamp(selectedLayer >= i ? selectedLayer - 1 : selectedLayer, 0, layers.length - 1);
+  renderLayers();
+  loadSelectedLayerIntoControls();
+  pushLayers();
+}
+
+function addLayer() {
+  if (layers.length >= 16) { toast('That’s plenty of layers'); return; }
+  const base = layers[selectedLayer];
+  const layer = newLayer('starlight', {
+    color: base ? { ...base.color } : undefined,
+    blend: layers.length ? 'lighten' : 'normal',
+  });
+  layers.splice(selectedLayer + 1, 0, layer);
+  phases.splice(selectedLayer + 1, 0, 0);
+  selectedLayer += layers.length > 1 ? 1 : 0;
+  renderLayers();
+  loadSelectedLayerIntoControls();
+  pushLayers();
+}
+
+// Rows are listed top-of-stack first, like any layers panel.
+function renderLayers() {
+  const list = $('layerList');
+  list.innerHTML = '';
+
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const layer = layers[i];
+    const row = document.createElement('div');
+    row.className = 'layer-row' + (i === selectedLayer ? ' selected' : '') + (layer.enabled ? '' : ' muted');
+    row.dataset.index = i;
+    row.addEventListener('click', () => { if (i !== selectedLayer) selectLayer(i); });
+
+    const num = document.createElement('span');
+    num.className = 'layer-num';
+    num.textContent = String(i + 1).padStart(2, '0');
+    row.appendChild(num);
+
+    row.appendChild(iconButton(layer.enabled ? ICON_EYE : ICON_EYE_OFF, layer.enabled ? 'Hide layer' : 'Show layer', () => {
+      layer.enabled = !layer.enabled;
+      renderLayers();
+      pushLayers();
+    }));
+
+    const fx = effectById(layer.effect);
+    const dot = document.createElement('span');
+    dot.className = 'layer-dot' + (fx.color === false ? ' palette' : '');
+    if (fx.color !== false) dot.style.background = rgbToHex(layer.color);
+    row.appendChild(dot);
+
+    const dropHost = document.createElement('div');
+    dropHost.className = 'layer-effect';
+    row.appendChild(dropHost);
+
+    const drop = createDropdown(dropHost, {
+      renderOption: renderEffectOption,
+      renderButton: (el, item) => { if (item) el.textContent = item.fx.name; },
+    });
+    drop.setOptions(effectItems());
+    drop.setValue(layer.effect);
+    drop.onChange((effect) => {
+      layer.effect = effect;
+      selectedLayer = i;
+      renderLayers();
+      loadSelectedLayerIntoControls();
+      updateToolUI();
+      pushLayers();
+      pollSystemSignals();
+    });
+
+    const scope = document.createElement('button');
+    scope.type = 'button';
+    scope.className = 'layer-scope';
+    scope.textContent = layer.mask === '*' ? 'All keys' : maskCount(layer.mask) + ' keys';
+    scope.title = 'Choose which keys this layer covers';
+    scope.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      selectedLayer = i;
+      renderLayers();
+      loadSelectedLayerIntoControls();
+      setTool('zone');
+    });
+    row.appendChild(scope);
+
+    const actions = document.createElement('div');
+    actions.className = 'layer-actions';
+    actions.appendChild(iconButton(ICON_UP, 'Move up', () => moveLayer(i, 1)));
+    actions.appendChild(iconButton(ICON_DOWN, 'Move down', () => moveLayer(i, -1)));
+    actions.appendChild(iconButton(ICON_X, 'Remove layer', () => removeLayer(i)));
+    row.appendChild(actions);
+
+    list.appendChild(row);
+  }
+
+  renderBlend();
+
+  const sel = layers[selectedLayer];
+  $('effectDescText').textContent = sel ? effectById(sel.effect).desc : '';
+}
+
+function renderBlend() {
+  const seg = $('blendSeg');
+  const layer = layers[selectedLayer];
+  seg.innerHTML = '';
+
+  BLENDS.forEach((b) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = b.label;
+    btn.classList.toggle('active', !!layer && layer.blend === b.value);
+    btn.addEventListener('click', () => {
+      if (!layer) return;
+      layer.blend = b.value;
+      renderBlend();
+      pushLayers();
+    });
+    seg.appendChild(btn);
+  });
+}
+
+// Colour, speed and opacity always edit the selected layer.
+function loadSelectedLayerIntoControls() {
+  const layer = layers[selectedLayer];
+  if (!layer) return;
+
+  layerPicker.set(layer.color);
+  showLayerColor(layer.color);
+
+  const usesColor = effectById(layer.effect).color !== false;
+  $('colorCell').classList.toggle('disabled', !usesColor);
+  $('colorNote').textContent = usesColor ? '' : effectById(layer.effect).name + ' uses its own palette';
+
+  $('speedSlider').value = Math.round(layer.speed * 10);
+  $('speedValue').textContent = layer.speed.toFixed(1) + 'x';
+  $('opacitySlider').value = Math.round(layer.opacity * 100);
+  $('opacityValue').textContent = Math.round(layer.opacity * 100) + '%';
+}
+
+function wireLayers() {
+  $('addLayerBtn').addEventListener('click', addLayer);
 }
 
 
@@ -958,10 +1640,6 @@ function wireSliders() {
     renderKeyboard();
   }, 120);
 
-  const postSpeed = debounce(async (v) => {
-    state.appState = await apiPost('/api/speed', { speed: v / 10 });
-  }, 120);
-
   brightness.addEventListener('input', () => {
     markBusy();
     $('brightnessValue').textContent = brightness.value + '%';
@@ -971,195 +1649,249 @@ function wireSliders() {
   });
 
   speed.addEventListener('input', () => {
-    markBusy();
-    $('speedValue').textContent = (speed.value / 10).toFixed(1) + 'x';
-    postSpeed(Number(speed.value));
+    const layer = layers[selectedLayer];
+    if (!layer) return;
+    layer.speed = speed.value / 10;
+    $('speedValue').textContent = layer.speed.toFixed(1) + 'x';
+    pushLayers();
+  });
+
+  const opacity = $('opacitySlider');
+  opacity.addEventListener('input', () => {
+    const layer = layers[selectedLayer];
+    if (!layer) return;
+    layer.opacity = opacity.value / 100;
+    $('opacityValue').textContent = opacity.value + '%';
+    pushLayers();
   });
 }
 
 
-// ---------- colour wheel ----------
+// ---------- colour picker ----------
 
-function buildWheelBase() {
-  const canvas = $('wheel');
-  const ctx = canvas.getContext('2d');
-  const size = canvas.width;
-  const cx = size / 2, cy = size / 2, radius = size / 2;
+// One picker component used everywhere a colour is chosen (the selected
+// layer's colour in the inspector, and the paint brush): a square of
+// saturation (x) by brightness (y), a vertical hue strip, a hex field and
+// preset swatches - no native <input type=color> dialog.
+function createColorPicker(host, onInput) {
+  host.classList.add('picker');
+  host.innerHTML =
+    '<div class="picker-sv" tabindex="0" role="slider" aria-label="Saturation and brightness">' +
+      '<canvas width="240" height="160"></canvas><span class="picker-thumb"></span></div>' +
+    '<div class="picker-hue" tabindex="0" role="slider" aria-label="Hue"><span class="picker-hue-thumb"></span></div>' +
+    '<div class="picker-foot">' +
+      '<span class="picker-swatch"></span>' +
+      '<input class="picker-hex" maxlength="7" spellcheck="false" aria-label="Hex colour">' +
+      '<div class="picker-presets"></div>' +
+    '</div>';
 
-  const img = ctx.createImageData(size, size);
+  const sv = host.querySelector('.picker-sv');
+  const canvas = sv.querySelector('canvas');
+  const thumb = sv.querySelector('.picker-thumb');
+  const hueStrip = host.querySelector('.picker-hue');
+  const hueThumb = host.querySelector('.picker-hue-thumb');
+  const swatch = host.querySelector('.picker-swatch');
+  const hexInput = host.querySelector('.picker-hex');
+  const presets = host.querySelector('.picker-presets');
 
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = x - cx, dy = y - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const idx = (y * size + x) * 4;
+  let h = 0, sat = 1, val = 1;
 
-      if (dist > radius) {
-        img.data[idx + 3] = 0;
-        continue;
-      }
-
-      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-      const hue = (angle + 360) % 360;
-      const sat = Math.min(1, dist / radius);
-
-      const rgb = hsvToRgb(hue, sat, 1);
-      img.data[idx] = rgb.r;
-      img.data[idx + 1] = rgb.g;
-      img.data[idx + 2] = rgb.b;
-      img.data[idx + 3] = 255;
-    }
-  }
-
-  wheelBase = img;
-  drawWheel();
-}
-
-function drawWheel() {
-  const canvas = $('wheel');
-  const ctx = canvas.getContext('2d');
-  if (!wheelBase) return;
-
-  ctx.putImageData(wheelBase, 0, 0);
-
-  const size = canvas.width, cx = size / 2, cy = size / 2, radius = size / 2;
-  const dist = wheelSat * radius;
-  const angle = wheelHue * Math.PI / 180;
-  const mx = cx + Math.cos(angle) * dist;
-  const my = cy + Math.sin(angle) * dist;
-
-  ctx.beginPath();
-  ctx.arc(mx, my, 6, 0, Math.PI * 2);
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(mx, my, 6, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(0,0,0,.45)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-}
-
-function updateSwatch() {
-  const rgb = hsvToRgb(wheelHue, wheelSat, wheelVal);
-  const hex = rgbToHex(rgb);
-  $('swatchPreview').style.background = hex;
-  $('swatchHex').textContent = hex;
-  $('railAccentDot').style.background = hex;
-  $('railAccentDot').style.boxShadow = `0 0 12px 2px ${hex}`;
-  updateValueSliderVisual();
-  return rgb;
-}
-
-function updateValueSliderVisual() {
-  const pct = clamp(wheelVal * 100, 0, 100);
-  $('valueFill').style.height = pct + '%';
-  $('valueThumb').style.bottom = pct + '%';
-  $('valueSlider').setAttribute('aria-valuenow', Math.round(pct));
-}
-
-const postColor = debounce((rgb) => {
-  apiPost('/api/color', rgb).then((res) => { state.appState = res; renderKeyboard(); });
-}, 90);
-
-function wireWheel() {
-  buildWheelBase();
-
-  const canvas = $('wheel');
-  let dragging = false;
-
-  const pick = (ev) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (ev.clientX - rect.left) * scaleX;
-    const y = (ev.clientY - rect.top) * scaleY;
-    const cx = canvas.width / 2, cy = canvas.height / 2, radius = canvas.width / 2;
-    const dx = x - cx, dy = y - cy;
-    const dist = Math.min(radius, Math.sqrt(dx * dx + dy * dy));
-
-    wheelHue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
-    wheelSat = dist / radius;
-
-    markBusy();
-    drawWheel();
-    postColor(updateSwatch());
+  const drawSquare = () => {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, ht = canvas.height;
+    ctx.fillStyle = rgbToHex(hsvToRgb(h, 1, 1));
+    ctx.fillRect(0, 0, w, ht);
+    const white = ctx.createLinearGradient(0, 0, w, 0);
+    white.addColorStop(0, '#fff'); white.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = white; ctx.fillRect(0, 0, w, ht);
+    const black = ctx.createLinearGradient(0, 0, 0, ht);
+    black.addColorStop(0, 'rgba(0,0,0,0)'); black.addColorStop(1, '#000');
+    ctx.fillStyle = black; ctx.fillRect(0, 0, w, ht);
   };
 
-  canvas.addEventListener('pointerdown', (ev) => { dragging = true; canvas.setPointerCapture(ev.pointerId); pick(ev); });
-  canvas.addEventListener('pointermove', (ev) => { if (dragging) pick(ev); });
-  canvas.addEventListener('pointerup', () => { dragging = false; });
-  canvas.addEventListener('pointercancel', () => { dragging = false; });
-
-  wireValueSlider();
-}
-
-function wireValueSlider() {
-  const slider = $('valueSlider');
-  let dragging = false;
-
-  const setFromClientY = (clientY) => {
-    const rect = slider.getBoundingClientRect();
-    const pct = clamp((rect.bottom - clientY) / rect.height, 0, 1);
-    wheelVal = pct;
-    markBusy();
-    postColor(updateSwatch());
+  const render = () => {
+    const hex = rgbToHex(hsvToRgb(h, sat, val));
+    thumb.style.left = (sat * 100) + '%';
+    thumb.style.top = ((1 - val) * 100) + '%';
+    thumb.style.background = hex;
+    hueThumb.style.top = (h / 360 * 100) + '%';
+    swatch.style.background = hex;
+    if (document.activeElement !== hexInput) hexInput.value = hex.toUpperCase();
   };
 
-  slider.addEventListener('pointerdown', (ev) => {
-    dragging = true;
-    slider.setPointerCapture(ev.pointerId);
-    slider.focus();
-    setFromClientY(ev.clientY);
+  const emit = () => {
+    markBusy();
+    render();
+    onInput(hsvToRgb(h, sat, val));
+  };
+
+  const drag = (el, apply) => {
+    el.addEventListener('pointerdown', (ev) => {
+      el.setPointerCapture(ev.pointerId);
+      apply(ev);
+      const move = (e) => apply(e);
+      const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', up);
+    });
+  };
+
+  drag(sv, (ev) => {
+    const r = sv.getBoundingClientRect();
+    sat = clamp((ev.clientX - r.left) / r.width, 0, 1);
+    val = clamp(1 - (ev.clientY - r.top) / r.height, 0, 1);
+    emit();
   });
-  slider.addEventListener('pointermove', (ev) => { if (dragging) setFromClientY(ev.clientY); });
-  slider.addEventListener('pointerup', () => { dragging = false; });
-  slider.addEventListener('pointercancel', () => { dragging = false; });
 
-  slider.addEventListener('keydown', (ev) => {
+  drag(hueStrip, (ev) => {
+    const r = hueStrip.getBoundingClientRect();
+    h = clamp((ev.clientY - r.top) / r.height, 0, 1) * 359.9;
+    drawSquare();
+    emit();
+  });
+
+  sv.addEventListener('keydown', (ev) => {
     const step = ev.shiftKey ? 0.1 : 0.02;
-    if (ev.key === 'ArrowUp' || ev.key === 'ArrowRight') { wheelVal = clamp(wheelVal + step, 0, 1); }
-    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowLeft') { wheelVal = clamp(wheelVal - step, 0, 1); }
-    else if (ev.key === 'Home') { wheelVal = 0; }
-    else if (ev.key === 'End') { wheelVal = 1; }
-    else { return; }
-
+    if (ev.key === 'ArrowLeft') sat = clamp(sat - step, 0, 1);
+    else if (ev.key === 'ArrowRight') sat = clamp(sat + step, 0, 1);
+    else if (ev.key === 'ArrowUp') val = clamp(val + step, 0, 1);
+    else if (ev.key === 'ArrowDown') val = clamp(val - step, 0, 1);
+    else return;
     ev.preventDefault();
-    markBusy();
-    postColor(updateSwatch());
+    emit();
   });
-}
 
-function buildPresets() {
-  const row = $('presetRow');
-  row.innerHTML = '';
+  hueStrip.addEventListener('keydown', (ev) => {
+    const step = ev.shiftKey ? 20 : 4;
+    if (ev.key === 'ArrowUp' || ev.key === 'ArrowLeft') h = (h - step + 360) % 360;
+    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowRight') h = (h + step) % 360;
+    else return;
+    ev.preventDefault();
+    drawSquare();
+    emit();
+  });
+
+  const set = (rgb) => {
+    const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+    // Keep the current hue for greys/black, where HSV has none.
+    if (hsv.s > 0.001 && hsv.v > 0.001) h = hsv.h;
+    sat = hsv.s; val = hsv.v;
+    drawSquare();
+    render();
+  };
+
+  hexInput.addEventListener('input', () => {
+    const v = hexInput.value.trim();
+    if (/^#?[0-9a-f]{6}$/i.test(v)) {
+      set(hexToRgb(v.startsWith('#') ? v : '#' + v));
+      onInput(hsvToRgb(h, sat, val));
+      markBusy();
+    }
+  });
+  hexInput.addEventListener('blur', render);
+  hexInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') hexInput.blur(); });
 
   PRESETS.forEach((hex) => {
-    const dot = document.createElement('button');
-    dot.type = 'button';
-    dot.className = 'preset-swatch';
-    dot.style.background = hex;
-    dot.title = hex;
-    dot.addEventListener('click', () => {
-      const rgb = hexToRgb(hex);
-      const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-      wheelHue = hsv.h; wheelSat = hsv.s; wheelVal = hsv.v;
-      markBusy();
-      drawWheel();
-      postColor(updateSwatch());
-    });
-    row.appendChild(dot);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'preset-swatch';
+    b.style.background = hex;
+    b.title = hex.toUpperCase();
+    b.addEventListener('click', () => { set(hexToRgb(hex)); emit(); });
+    presets.appendChild(b);
+  });
+
+  drawSquare();
+  render();
+  return { set };
+}
+
+let layerPicker = null;
+
+// Mirrors the selected layer's colour into the header lamp and the
+// inspector's hex readout.
+function showLayerColor(rgb) {
+  const hex = rgbToHex(rgb);
+  $('swatchHex').textContent = hex.toUpperCase();
+  $('railAccentDot').style.background = hex;
+}
+
+function postColor(rgb) {
+  const layer = layers[selectedLayer];
+  if (!layer) return;
+  layer.color = { r: Math.round(rgb.r), g: Math.round(rgb.g), b: Math.round(rgb.b) };
+  showLayerColor(layer.color);
+  const dot = document.querySelector('.layer-row.selected .layer-dot:not(.palette)');
+  if (dot) dot.style.background = rgbToHex(layer.color);
+  pushLayers();
+}
+
+function wireLayerPicker() {
+  layerPicker = createColorPicker($('layerPicker'), postColor);
+}
+
+
+// ---------- modal ----------
+
+// In-page replacement for prompt()/confirm(), styled like the rest of the
+// app. Resolves to the entered text (input mode), true/false (confirm
+// mode), or null when cancelled.
+let modalResolve = null;
+
+function closeModal(result) {
+  $('modal').hidden = true;
+  const resolve = modalResolve;
+  modalResolve = null;
+  if (resolve) resolve(result);
+}
+
+function openModal({ title, text = '', input = null, okLabel = 'OK', danger = false }) {
+  if (modalResolve) closeModal(null);
+
+  $('modalTitle').textContent = title;
+  $('modalText').textContent = text;
+  $('modalText').hidden = !text;
+
+  const field = $('modalInput');
+  field.hidden = input === null;
+  field.value = input || '';
+
+  const ok = $('modalOk');
+  ok.textContent = okLabel;
+  ok.classList.toggle('danger', danger);
+
+  $('modal').hidden = false;
+  setTimeout(() => (input === null ? ok : field).focus(), 0);
+  if (input !== null) field.select();
+
+  return new Promise((resolve) => { modalResolve = resolve; });
+}
+
+function askText(title, initial, okLabel) {
+  return openModal({ title, input: initial, okLabel }).then((v) => (v ? v.trim() : null));
+}
+
+function askConfirm(title, text, okLabel) {
+  return openModal({ title, text, okLabel, danger: true }).then((v) => v === true);
+}
+
+function wireModal() {
+  const submit = () => closeModal($('modalInput').hidden ? true : $('modalInput').value);
+  $('modalOk').addEventListener('click', submit);
+  $('modalCancel').addEventListener('click', () => closeModal(null));
+  $('modal').addEventListener('pointerdown', (ev) => { if (ev.target === $('modal')) closeModal(null); });
+  $('modal').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') closeModal(null);
+    else if (ev.key === 'Enter') { ev.preventDefault(); submit(); }
   });
 }
 
 
 // ---------- profiles ----------
 
-let profileDropdown = null;
-
 function wireProfiles() {
   $('addProfileBtn').addEventListener('click', async () => {
-    const name = prompt('Save current lighting as profile:', 'New Profile');
+    const name = await askText('Save as profile', 'New Profile', 'Save');
     if (!name) return;
 
     const res = await apiPost('/api/profiles/save', { name });
@@ -1167,13 +1899,8 @@ function wireProfiles() {
     renderProfiles();
     toast('Profile "' + name + '" saved');
   });
-
-  profileDropdown = createDropdown($('profileDropdown'));
-  profileDropdown.onChange((index) => applyProfile(Number(index)));
 }
 
-// Shared by the sidebar's profile cards and the quick-select dropdown in
-// the Lighting section, so picking a profile either way stays in sync.
 async function applyProfile(index) {
   const p = state.profiles.profiles[index];
   if (!p) return;
@@ -1188,20 +1915,6 @@ async function applyProfile(index) {
   toast('Applied "' + p.name + '"');
 }
 
-function renderProfileDropdown() {
-  const profiles = state.profiles ? state.profiles.profiles : [];
-  const activeIndex = state.profiles ? state.profiles.activeIndex : -1;
-
-  if (profiles.length === 0) {
-    profileDropdown.setOptions([{ value: '-1', label: 'No profiles saved yet' }]);
-    profileDropdown.setValue('-1');
-    return;
-  }
-
-  profileDropdown.setOptions(profiles.map((p, i) => ({ value: String(i), label: p.name })));
-  profileDropdown.setValue(String(activeIndex));
-}
-
 function renderProfiles() {
   const list = $('profileList');
   list.innerHTML = '';
@@ -1209,12 +1922,11 @@ function renderProfiles() {
   const profiles = state.profiles ? state.profiles.profiles : [];
   const activeIndex = state.profiles ? state.profiles.activeIndex : -1;
 
-  renderProfileDropdown();
 
   if (profiles.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'profile-empty';
-    empty.textContent = 'No saved profiles yet. Set up your lighting, then hit + to save it.';
+    empty.textContent = 'None yet — set up your lighting, then hit Save.';
     list.appendChild(empty);
     return;
   }
@@ -1234,11 +1946,11 @@ function renderProfiles() {
 
     const renameBtn = document.createElement('button');
     renameBtn.type = 'button';
-    renameBtn.textContent = '✎';
+    renameBtn.innerHTML = ICON_PEN;
     renameBtn.title = 'Rename';
     renameBtn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      const newName = prompt('Rename profile:', p.name);
+      const newName = await askText('Rename profile', p.name, 'Rename');
       if (!newName || newName === p.name) return;
       const res = await apiPost('/api/profiles/rename', { index: i, name: newName });
       state.profiles = res;
@@ -1247,11 +1959,11 @@ function renderProfiles() {
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
-    deleteBtn.textContent = '✕';
+    deleteBtn.innerHTML = ICON_X;
     deleteBtn.title = 'Delete';
     deleteBtn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      if (!confirm('Delete profile "' + p.name + '"?')) return;
+      if (!await askConfirm('Delete profile?', '"' + p.name + '" will be removed. This can’t be undone.', 'Delete')) return;
       const res = await apiPost('/api/profiles/delete', { index: i });
       state.profiles = res;
       renderProfiles();
@@ -1444,7 +2156,7 @@ function renderMacroSteps() {
     removeBtn.type = 'button';
     removeBtn.className = 'macro-step-remove';
     removeBtn.title = 'Remove step';
-    removeBtn.textContent = '✕';
+    removeBtn.innerHTML = ICON_X;
     removeBtn.addEventListener('click', () => {
       macroSteps.splice(i, 1);
       renderMacroSteps();
@@ -1530,7 +2242,7 @@ function renderBindingList() {
     deleteBtn.type = 'button';
     deleteBtn.className = 'icon-btn';
     deleteBtn.title = 'Remove binding';
-    deleteBtn.textContent = '✕';
+    deleteBtn.innerHTML = ICON_X;
     deleteBtn.addEventListener('click', async () => {
       try {
         const res = await apiPost('/api/remap/binding/delete', { key: b.key });
@@ -1572,6 +2284,7 @@ function wireCalibration() {
 async function startCalibration() {
   try {
     state.calibration = await apiPost('/api/calibration/start', {});
+    showView('section-lighting');
     renderCalibrationUI();
     toast('Calibration started - watch your physical keyboard');
   } catch (e) {
@@ -1675,22 +2388,16 @@ async function pollStatus() {
 // responses - if another browser tab changed anything, this
 // page would show stale data forever. Poll the real state periodically
 // and re-render, but never while the user is mid-interaction (dragging a
-// slider/wheel or typing in the key colour popover) so a network refresh
+// a slider or the colour picker) so a network refresh
 // can't yank a control out from under their pointer.
 async function refreshState() {
-  if (isBusy()) return;
+  if (isBusy() || stroke || document.querySelector('.cdrop.open')) return;
 
   try {
-    const previousMode = state.appState ? state.appState.mode : null;
     const fresh = await apiGet('/api/state');
+    const layersChanged = JSON.stringify(fresh.layers) !== JSON.stringify(layers);
     state.appState = fresh;
-    // Only restart the preview's animation clock when the mode actually
-    // changed (e.g. another tab/profile switched it) - resetting it on
-    // every 5s poll would make the animation stutter back to t=0
-    // constantly even while a single effect stays selected.
-    if (fresh.mode !== previousMode) resetAnimationClock();
-    applyStateToControls();
-    renderKeyboard();
+    applyStateToControls(layersChanged);
   } catch (e) {
     // Handled by pollStatus's own error path already covering reachability.
   }
@@ -1699,26 +2406,29 @@ async function refreshState() {
 
 // ---------- apply loaded state to controls ----------
 
-function applyStateToControls() {
+// reloadLayers: replace the local layer stack with the server's (on load,
+// after applying a profile, or when another tab changed it).
+function applyStateToControls(reloadLayers = true) {
   const s = state.appState;
   if (!s) return;
 
   $('brightnessSlider').value = Math.round(s.brightness * 100);
   $('brightnessValue').textContent = Math.round(s.brightness * 100) + '%';
 
-  $('speedSlider').value = Math.round(s.speed * 10);
-  $('speedValue').textContent = s.speed.toFixed(1) + 'x';
-
-  const hsv = rgbToHsv(s.activeColor.r, s.activeColor.g, s.activeColor.b);
-  wheelHue = hsv.h; wheelSat = hsv.s; wheelVal = hsv.v || 1;
-  drawWheel();
-  updateSwatch();
+  if (reloadLayers) {
+    syncLayersFromState();
+    renderLayers();
+    loadSelectedLayerIntoControls();
+    updateToolUI();
+    pollSystemSignals();
+  } else {
+    state.appState.layers = layers;
+  }
 
   $('calibrationText').textContent = s.calibrated
     ? 'This keyboard has been calibrated — per-key colours map to the correct physical LEDs.'
     : 'Not calibrated yet - per-key colours may land on the wrong keys until this keyboard has been calibrated.';
 
-  highlightActiveEffect();
   renderDaemonStatus(s.daemonRunning);
 }
 
@@ -1731,8 +2441,12 @@ function init() {
   wireProfiles();
   wireDaemonControls();
   wireMacros();
-  buildEffectSelect();
-  buildPresets();
+  wireCalibration();
+  wireLayers();
+  wireTools();
+  wireKeySignals();
+  wireLayerPicker();
+  wireModal();
 
   Promise.all([apiGet('/api/layout'), apiGet('/api/state'), apiGet('/api/profiles'), apiGet('/api/remap')])
     .then(([layout, appState, profiles, remap]) => {
@@ -1741,9 +2455,7 @@ function init() {
       state.profiles = profiles;
       state.remap = remap;
 
-      wireWheel();
       buildKeyboardDom();
-      resetAnimationClock();
       startAnimationLoop();
       applyStateToControls();
       renderProfiles();
@@ -1754,8 +2466,20 @@ function init() {
     })
     .catch(() => toast('Could not reach openaula-webd'));
 
+  // A calibration session lives on the backend, so it survives a page
+  // reload - pick it back up instead of leaving the keyboard stuck
+  // lighting one LED with no wizard on screen.
+  apiGet('/api/calibration')
+    .then((calib) => {
+      state.calibration = calib;
+      if (calib.active) showView('section-lighting');
+      renderCalibrationUI();
+    })
+    .catch(() => {});
+
   setInterval(pollStatus, 4000);
   setInterval(refreshState, 5000);
+  setInterval(pollSystemSignals, 1000);
 }
 
 document.addEventListener('DOMContentLoaded', init);

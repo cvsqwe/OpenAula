@@ -5,6 +5,8 @@
 #include "Color.h"
 #include "LightingMode.h"
 #include "KeyboardLayout.h"
+#include "Layer.h"
+#include "SystemSignals.h"
 
 
 // Pure per-key colour math for every lighting mode, shared verbatim by the
@@ -23,14 +25,37 @@ namespace LightingEngine
 //   keys        - board layout (for spatial modes: position drives them)
 //   baseColors  - the user's saved per-key design; used as-is for Custom,
 //                 and as the brightness base for Breathing
-//   activeColor - the single accent colour driving Bounce/Wave/Ripple
+//   activeColor - the colour driving single-colour effects (a layer's
+//                 own colour when called from composite())
+//   sys         - live keystroke / machine state for reactive and system
+//                 effects; ignored by everything else
 std::vector<Color> computeFrame(
     LightingMode mode,
     double t,
     const std::vector<KeyDef>& keys,
     const std::vector<Color>& baseColors,
-    const Color& activeColor
+    const Color& activeColor,
+    const SystemSignals& sys = SystemSignals()
 );
+
+// Renders the whole layer stack bottom-to-top into one frame. phases[i]
+// is layer i's own animation clock (seconds, already scaled by that
+// layer's speed); missing entries count as 0.
+std::vector<Color> composite(
+    const std::vector<Layer>& layers,
+    const std::vector<double>& phases,
+    const std::vector<KeyDef>& keys,
+    const std::vector<Color>& baseColors,
+    const SystemSignals& sys
+);
+
+// False for effects whose output never changes on its own (Custom, Off),
+// so callers can drop to a slow refresh rate.
+bool isAnimated(LightingMode mode);
+
+// Effects that read SystemSignals' machine metrics / keystrokes.
+bool usesSystemMetrics(LightingMode mode);
+bool usesKeystrokes(LightingMode mode);
 
 // Scales every colour in `frame` by `brightness` (0.0..1.0) in place -
 // the final step both the GUI's preview and the values actually sent to

@@ -20,6 +20,8 @@
 #include "../core/RemapConfig.h"
 #include "../core/KeyCodes.h"
 #include "../core/CalibrationSession.h"
+#include "../core/SystemMonitor.h"
+#include "../core/Layer.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -27,6 +29,7 @@
 #include <iostream>
 #include <sstream>
 #include <filesystem>
+#include <mutex>
 
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -250,6 +253,57 @@ void stopRemapd()
 }
 
 
+// --- layers <-> JSON ---
+
+std::string layersToJson(const std::vector<Layer>& layers)
+{
+    std::ostringstream ss;
+    ss << "[";
+
+    for(size_t i = 0; i < layers.size(); i++)
+    {
+        const Layer& l = layers[i];
+        if(i > 0) ss << ",";
+
+        ss << "{\"effect\":\"" << StateFormat::modeToString(l.effect) << "\","
+           << "\"color\":" << jsonColor(l.color) << ","
+           << "\"speed\":" << l.speed << ","
+           << "\"opacity\":" << l.opacity << ","
+           << "\"blend\":\"" << StateFormat::blendToString(l.blend) << "\","
+           << "\"enabled\":" << (l.enabled ? "true" : "false") << ","
+           << "\"mask\":\"" << StateFormat::maskToString(l.mask) << "\"}";
+    }
+
+    ss << "]";
+    return ss.str();
+}
+
+std::vector<Layer> layersFromJson(const json::Value& arr)
+{
+    std::vector<Layer> layers;
+
+    // A stack is a handful of layers in practice; the cap just keeps a
+    // malformed request from writing an absurd state file.
+    for(const json::Value& item : arr.items())
+    {
+        if(layers.size() >= 16)
+            break;
+
+        Layer l;
+        l.effect = StateFormat::modeFromString(item["effect"].asString("custom"));
+        l.color = colorFromJson(item["color"]);
+        l.speed = std::max(0.1, std::min(3.0, item["speed"].asNumber(1.0)));
+        l.opacity = std::max(0.0, std::min(1.0, item["opacity"].asNumber(1.0)));
+        l.blend = StateFormat::blendFromString(item["blend"].asString("normal"));
+        l.enabled = item["enabled"].asBool(true);
+        l.mask = StateFormat::maskFromString(item["mask"].asString("*"), gKeyCount);
+        layers.push_back(l);
+    }
+
+    return layers;
+}
+
+
 // --- state <-> JSON ---
 
 std::string stateToJson(const AppState& state)
@@ -262,6 +316,7 @@ std::string stateToJson(const AppState& state)
        << "\"brightness\":" << state.brightness() << ","
        << "\"activeColor\":" << jsonColor(state.activeColor()) << ","
        << "\"customColors\":" << jsonColors(state.customColorsRef()) << ","
+       << "\"layers\":" << layersToJson(state.layers()) << ","
        << "\"activeProfile\":\"" << jsonEscape(state.activeProfile()) << "\","
        << "\"calibrated\":" << (state.isCalibrated() ? "true" : "false") << ","
        << "\"daemonRunning\":" << (isDaemonRunning() ? "true" : "false")
@@ -529,6 +584,7 @@ int main(int argc, char** argv)
         AppState state;
         state.load(gKeyCount);
         state.setMode(StateFormat::modeFromString(body["mode"].asString("custom")));
+        state.setLayers(StateFormat::legacyLayers(state.mode(), state.activeColor(), state.speed()));
         state.save();
         nudgeDaemon();
 
@@ -572,6 +628,53 @@ int main(int argc, char** argv)
         nudgeDaemon();
 
         res.body = stateToJson(state);
+    });
+
+    server.post("/api/layers", [](const HttpRequest& req, HttpResponse& res)
+    {
+        json::Value body = json::Value::parse(req.body);
+
+        AppState state;
+        state.load(gKeyCount);
+        state.setLayers(layersFromJson(body["layers"]));
+
+        // Painting keys changes the canvas colours and (usually) a Canvas
+        // layer's mask together - accepting both here keeps that one save.
+        if(body["customColors"].type() == json::Value::Type::Array)
+        {
+            std::vector<Color> colors = state.customColorsRef();
+            const auto& items = body["customColors"].items();
+
+            for(int i = 0; i < gKeyCount && i < (int)items.size() && i < (int)colors.size(); i++)
+                colors[i] = colorFromJson(items[i]);
+
+            state.setCustomColors(colors);
+        }
+
+        state.save();
+        nudgeDaemon();
+
+        res.body = stateToJson(state);
+    });
+
+    // Live machine metrics for the browser's preview of the system
+    // effects - the same SystemMonitor the daemon samples, so the preview
+    // reacts to the same numbers the keyboard does.
+    server.get("/api/system", [](const HttpRequest&, HttpResponse& res)
+    {
+        static std::mutex monitorMutex;
+        static SystemMonitor monitor;
+        static SystemSignals signals;
+
+        std::lock_guard<std::mutex> lock(monitorMutex);
+        monitor.sample(signals);
+
+        std::ostringstream ss;
+        ss << "{\"cpu\":" << signals.cpu << ",\"memory\":" << signals.memory
+           << ",\"temperature\":" << signals.temperature << ",\"network\":" << signals.network
+           << ",\"hour\":" << signals.hour << ",\"minute\":" << signals.minute
+           << ",\"second\":" << signals.second << "}";
+        res.body = ss.str();
     });
 
     server.post("/api/custom-colors", [](const HttpRequest& req, HttpResponse& res)
@@ -630,6 +733,7 @@ int main(int argc, char** argv)
         p.brightness = state.brightness();
         p.activeColor = state.activeColor();
         p.customColors = state.customColorsRef();
+        p.layers = state.layers();
 
         ProfileStore profiles;
         profiles.load(gKeyCount);
@@ -674,6 +778,7 @@ int main(int argc, char** argv)
         state.setBrightness(p.brightness);
         state.setActiveColor(p.activeColor);
         state.setCustomColors(p.customColors);
+        state.setLayers(p.layers);
         state.setActiveProfile(p.name);
         state.save();
 

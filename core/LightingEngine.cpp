@@ -58,6 +58,89 @@ Color scaleColor(const Color& c, double k)
     };
 }
 
+Color fromHsv(double h, double s, double v)
+{
+    h = std::fmod(h, 1.0);
+    if(h < 0) h += 1.0;
+    s = std::clamp(s, 0.0, 1.0);
+    v = std::clamp(v, 0.0, 1.0);
+
+    double sector = h * 6.0;
+    int i = (int)sector;
+    double f = sector - i;
+    double p = v * (1 - s), q = v * (1 - s * f), u = v * (1 - s * (1 - f));
+    double r, g, b;
+
+    switch(i % 6)
+    {
+        case 0: r = v; g = u; b = p; break;
+        case 1: r = q; g = v; b = p; break;
+        case 2: r = p; g = v; b = u; break;
+        case 3: r = p; g = q; b = v; break;
+        case 4: r = u; g = p; b = v; break;
+        default: r = v; g = p; b = q; break;
+    }
+
+    return Color{ (unsigned char)(r * 255), (unsigned char)(g * 255), (unsigned char)(b * 255) };
+}
+
+void toHsv(const Color& c, double& h, double& s, double& v)
+{
+    double r = c.r / 255.0, g = c.g / 255.0, b = c.b / 255.0;
+    double mx = std::max({r, g, b}), mn = std::min({r, g, b}), d = mx - mn;
+
+    v = mx;
+    s = mx > 0 ? d / mx : 0;
+    h = 0;
+
+    if(d > 0)
+    {
+        if(mx == r)      h = std::fmod((g - b) / d, 6.0);
+        else if(mx == g) h = (b - r) / d + 2.0;
+        else             h = (r - g) / d + 4.0;
+
+        h /= 6.0;
+        if(h < 0) h += 1.0;
+    }
+}
+
+// Same colour with its hue rotated by `shift` turns (0..1).
+Color shiftHue(const Color& c, double shift)
+{
+    double h, s, v;
+    toHsv(c, h, s, v);
+    return fromHsv(h + shift, s, v);
+}
+
+Color mixColor(const Color& a, const Color& b, double k)
+{
+    k = std::clamp(k, 0.0, 1.0);
+    return Color{
+        (unsigned char)(a.r + (b.r - a.r) * k),
+        (unsigned char)(a.g + (b.g - a.g) * k),
+        (unsigned char)(a.b + (b.b - a.b) * k)
+    };
+}
+
+void boardExtent(const std::vector<KeyDef>& keys, double& maxX, double& maxY)
+{
+    maxX = 0; maxY = 0;
+    for(const auto& k : keys)
+    {
+        maxX = std::max(maxX, k.x + k.w);
+        maxY = std::max(maxY, k.y + k.h);
+    }
+}
+
+int findKey(const std::vector<KeyDef>& keys, const char* label)
+{
+    for(size_t i = 0; i < keys.size(); i++)
+        if(keys[i].label == label)
+            return (int)i;
+
+    return -1;
+}
+
 // Cheap, deterministic pseudo-random 0..1 from an integer key and a
 // "salt" (a second axis - a different salt gives an independent stream
 // for the same key, e.g. per-mode or per-flicker-frame). Deterministic
@@ -83,7 +166,8 @@ std::vector<Color> computeFrame(
     double t,
     const std::vector<KeyDef>& keys,
     const std::vector<Color>& baseColors,
-    const Color& activeColor
+    const Color& activeColor,
+    const SystemSignals& sys
 )
 {
     std::vector<Color> frame(keys.size(), Color{0, 0, 0});
@@ -103,8 +187,8 @@ std::vector<Color> computeFrame(
     {
         double k = 0.1 + 0.9 * (std::sin(t * 2.0) + 1.0) / 2.0;
 
-        for(size_t i = 0; i < keys.size() && i < baseColors.size(); i++)
-            frame[i] = scaleColor(baseColors[i], k);
+        for(size_t i = 0; i < keys.size(); i++)
+            frame[i] = scaleColor(activeColor, k);
 
         return frame;
     }
@@ -450,6 +534,197 @@ std::vector<Color> computeFrame(
         return frame;
     }
 
+    if(mode == LightingMode::Aurora)
+    {
+        for(size_t i = 0; i < keys.size(); i++)
+        {
+            double x = keys[i].x + keys[i].w / 2.0, y = keys[i].y + keys[i].h / 2.0;
+            double v = std::sin(x * 0.45 + t * 0.7) + std::sin(y * 0.9 - t * 0.5) + std::sin((x + y) * 0.3 + t * 0.35);
+            double n = (v + 3.0) / 6.0;
+
+            frame[i] = scaleColor(shiftHue(activeColor, (n - 0.5) * 0.35), 0.3 + 0.7 * n);
+        }
+
+        return frame;
+    }
+
+    if(mode == LightingMode::Matrix)
+    {
+        double maxX, maxY;
+        boardExtent(keys, maxX, maxY);
+
+        for(size_t i = 0; i < keys.size(); i++)
+        {
+            double colSeed = hash01((int)std::lround((keys[i].x + keys[i].w / 2.0) * 2.0), 59);
+            double period = 1.6 + colSeed * 1.6;
+            double localT = std::fmod(t + colSeed * 17.0, period);
+            double headY = (localT / period) * (maxY + 5.0) - 1.0;
+            double d = headY - (keys[i].y + keys[i].h / 2.0);
+
+            if(d < 0 || d > 4.0)
+                continue;
+
+            double b = std::pow(1.0 - d / 4.0, 1.6);
+            Color c = scaleColor(activeColor, b);
+
+            frame[i] = d < 0.7 ? mixColor(c, Color{255, 255, 255}, 0.45) : c;
+        }
+
+        return frame;
+    }
+
+    if(mode == LightingMode::Gradient)
+    {
+        double maxX, maxY;
+        boardExtent(keys, maxX, maxY);
+        double drift = std::sin(t * 0.3) * 0.06;
+
+        for(size_t i = 0; i < keys.size(); i++)
+        {
+            double pos = (keys[i].x + keys[i].w / 2.0) / std::max(1.0, maxX);
+            frame[i] = shiftHue(activeColor, pos * 0.33 + drift);
+        }
+
+        return frame;
+    }
+
+    if(mode == LightingMode::Afterglow)
+    {
+        for(size_t i = 0; i < keys.size(); i++)
+        {
+            double age = i < sys.keyAge.size() ? sys.keyAge[i] : 1e9;
+            double b = age < 1.4 ? std::pow(1.0 - age / 1.4, 2.0) : 0.0;
+
+            frame[i] = scaleColor(activeColor, b);
+        }
+
+        return frame;
+    }
+
+    if(mode == LightingMode::Splash)
+    {
+        const double life = 1.1, speedUnits = 10.0, width = 1.3;
+
+        for(size_t i = 0; i < keys.size(); i++)
+        {
+            double kx = keys[i].x + keys[i].w / 2.0, ky = keys[i].y + keys[i].h / 2.0;
+            double best = 0.0;
+
+            for(size_t j = 0; j < keys.size() && j < sys.keyAge.size(); j++)
+            {
+                double age = sys.keyAge[j];
+                if(age >= life)
+                    continue;
+
+                double ox = keys[j].x + keys[j].w / 2.0, oy = keys[j].y + keys[j].h / 2.0;
+                double dist = std::sqrt((kx - ox) * (kx - ox) + (ky - oy) * (ky - oy));
+                double ring = std::max(0.0, 1.0 - std::fabs(dist - age * speedUnits) / width);
+
+                best = std::max(best, ring * (1.0 - age / life));
+            }
+
+            frame[i] = scaleColor(activeColor, best);
+        }
+
+        return frame;
+    }
+
+    if(mode == LightingMode::CpuLoad)
+    {
+        double maxX, maxY;
+        boardExtent(keys, maxX, maxY);
+
+        for(size_t i = 0; i < keys.size(); i++)
+        {
+            double pos = (keys[i].x + keys[i].w / 2.0) / std::max(1.0, maxX);
+            if(pos > sys.cpu)
+                continue;
+
+            // green -> amber -> red along the bar
+            frame[i] = fromHsv(0.33 * (1.0 - pos), 1.0, 1.0);
+        }
+
+        return frame;
+    }
+
+    if(mode == LightingMode::Memory)
+    {
+        double maxX, maxY;
+        boardExtent(keys, maxX, maxY);
+
+        for(size_t i = 0; i < keys.size(); i++)
+        {
+            double fromBottom = 1.0 - (keys[i].y + keys[i].h / 2.0) / std::max(1.0, maxY);
+            frame[i] = fromBottom <= sys.memory ? activeColor : Color{0, 0, 0};
+        }
+
+        return frame;
+    }
+
+    if(mode == LightingMode::Thermal)
+    {
+        double breathe = 0.8 + 0.2 * std::sin(t * (1.5 + sys.temperature * 4.0));
+        Color c = fromHsv(0.62 * (1.0 - sys.temperature), 1.0, breathe);
+
+        for(size_t i = 0; i < keys.size(); i++)
+            frame[i] = c;
+
+        return frame;
+    }
+
+    if(mode == LightingMode::Network)
+    {
+        int step = (int)std::floor(t * 8.0);
+        double within = t * 8.0 - step;
+        double chance = 0.03 + sys.network * 0.55;
+
+        for(size_t i = 0; i < keys.size(); i++)
+        {
+            double b = hash01(keys[i].ledIndex, step * 31 + 7) < chance ? (1.0 - within) : 0.0;
+            frame[i] = scaleColor(activeColor, 0.06 + 0.94 * b);
+        }
+
+        return frame;
+    }
+
+    if(mode == LightingMode::Clock)
+    {
+        static const char* fKeys[] = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"};
+        static const char* digits[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+
+        Color dim = scaleColor(activeColor, 0.08);
+        Color second = shiftHue(activeColor, 0.5);
+
+        for(const char* label : fKeys)
+        {
+            int k = findKey(keys, label);
+            if(k >= 0) frame[k] = dim;
+        }
+
+        int hour12 = sys.hour % 12 == 0 ? 12 : sys.hour % 12;
+        int hk = findKey(keys, fKeys[hour12 - 1]);
+        if(hk >= 0) frame[hk] = activeColor;
+
+        int tens = findKey(keys, digits[(sys.minute / 10) % 10]);
+        int units = findKey(keys, digits[sys.minute % 10]);
+
+        if(tens >= 0) frame[tens] = activeColor;
+        if(units >= 0) frame[units] = (units == tens) ? Color{255, 255, 255} : second;
+
+        int esc = findKey(keys, "Esc");
+        if(esc >= 0) frame[esc] = scaleColor(activeColor, sys.second % 2 == 0 ? 0.9 : 0.15);
+
+        return frame;
+    }
+
+    if(mode == LightingMode::Indicators)
+    {
+        int caps = findKey(keys, "Caps");
+        if(caps >= 0 && sys.capsLock) frame[caps] = activeColor;
+
+        return frame;
+    }
+
     if(mode == LightingMode::Sweep)
     {
         double maxX = 0, maxY = 0;
@@ -476,6 +751,83 @@ std::vector<Color> computeFrame(
     }
 
     return frame;
+}
+
+
+
+std::vector<Color> composite(
+    const std::vector<Layer>& layers,
+    const std::vector<double>& phases,
+    const std::vector<KeyDef>& keys,
+    const std::vector<Color>& baseColors,
+    const SystemSignals& sys
+)
+{
+    std::vector<double> acc(keys.size() * 3, 0.0);
+
+    for(size_t li = 0; li < layers.size(); li++)
+    {
+        const Layer& layer = layers[li];
+        if(!layer.enabled || layer.effect == LightingMode::Off)
+            continue;
+
+        double t = li < phases.size() ? phases[li] : 0.0;
+        double o = std::clamp(layer.opacity, 0.0, 1.0);
+
+        std::vector<Color> src = computeFrame(layer.effect, t, keys, baseColors, layer.color, sys);
+
+        for(size_t i = 0; i < keys.size(); i++)
+        {
+            if(!layer.mask.empty() && (i >= layer.mask.size() || !layer.mask[i]))
+                continue;
+
+            double s[3] = { (double)src[i].r, (double)src[i].g, (double)src[i].b };
+
+            for(int c = 0; c < 3; c++)
+            {
+                double& d = acc[i * 3 + c];
+
+                switch(layer.blend)
+                {
+                    case BlendMode::Normal:   d = d * (1 - o) + s[c] * o; break;
+                    case BlendMode::Add:      d = std::min(255.0, d + s[c] * o); break;
+                    case BlendMode::Lighten:  d = d + (std::max(d, s[c]) - d) * o; break;
+                    case BlendMode::Multiply: d = d * (1 - o) + d * (s[c] / 255.0) * o; break;
+                }
+            }
+        }
+    }
+
+    std::vector<Color> frame(keys.size());
+
+    for(size_t i = 0; i < keys.size(); i++)
+        frame[i] = Color{
+            (unsigned char)std::clamp(acc[i * 3], 0.0, 255.0),
+            (unsigned char)std::clamp(acc[i * 3 + 1], 0.0, 255.0),
+            (unsigned char)std::clamp(acc[i * 3 + 2], 0.0, 255.0)
+        };
+
+    return frame;
+}
+
+
+
+bool isAnimated(LightingMode mode)
+{
+    return mode != LightingMode::Custom && mode != LightingMode::Off;
+}
+
+bool usesSystemMetrics(LightingMode mode)
+{
+    return mode == LightingMode::CpuLoad || mode == LightingMode::Memory
+        || mode == LightingMode::Thermal || mode == LightingMode::Network
+        || mode == LightingMode::Clock;
+}
+
+bool usesKeystrokes(LightingMode mode)
+{
+    return mode == LightingMode::Afterglow || mode == LightingMode::Splash
+        || mode == LightingMode::Indicators;
 }
 
 

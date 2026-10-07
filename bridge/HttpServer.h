@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -59,5 +60,6 @@ private:
 
     std::unordered_map<std::string, HttpHandler> getRoutes;
     std::unordered_map<std::string, HttpHandler> postRoutes;
+    std::mutex apiMutex;
     std::string staticDir;
 };

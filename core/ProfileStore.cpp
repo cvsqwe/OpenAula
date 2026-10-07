@@ -107,6 +107,10 @@ void ProfileStore::load(int keyCount)
             ? StateFormat::colorsFromString(fields["colors"], keyCount)
             : std::vector<Color>(keyCount, Color{24, 24, 28});
 
+        p.layers = fields.count("layers")
+            ? StateFormat::layersFromFields(fields, keyCount)
+            : StateFormat::legacyLayers(p.mode, p.activeColor, p.speed);
+
         profiles.push_back(p);
         fields.clear();
     };
@@ -180,5 +184,6 @@ void ProfileStore::save() const
         file << "brightness=" << p.brightness << "\n";
         file << "active=" << StateFormat::colorToString(p.activeColor) << "\n";
         file << "colors=" << StateFormat::colorsToString(p.customColors) << "\n";
+        StateFormat::writeLayers(file, p.layers);
     }
 }
