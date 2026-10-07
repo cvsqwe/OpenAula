@@ -24,6 +24,7 @@
 - [Quick start](#quick-start)
 - [What the installer does](#what-the-installer-does)
 - [Running without installing](#running-without-installing)
+- [Lighting layers & effects](#lighting-layers--effects)
 - [Macros & key remaps](#macros--key-remaps)
 - [Known limitations](#known-limitations)
 - [Uninstalling](#uninstalling)
@@ -51,13 +52,17 @@ Everything here is **Linux-only** (`hidraw` / `evdev` / `uinput`).
 
 ## Screenshots
 
-**Lighting** — pick an effect, paint individual keys, and manage profiles from the right-hand rail.
+**Lighting** — the live preview of the board (lit legends and the glow under the caps, as on the real keyboard), the paint tool above it, profiles below, and the layer inspector on the right.
 
-<p align="center"><img src="docs/screenshots/lighting.png" alt="OpenAULA lighting page — effect picker, per-key painter, brightness/speed sliders and colour wheel" width="800"></p>
+<p align="center"><img src="docs/screenshots/lighting.png" alt="OpenAULA lighting page — live keyboard preview, paint toolbar, profiles, and the layer inspector with colour picker and output sliders" width="800"></p>
 
-**Macros & Remap** — bind any physical key to another key, disable it, or attach a multi-step macro, all applied system-wide by `openaula-remapd`.
+**Effects** — every layer picks from one grouped list: still, ambient, motion, reactive (driven by your typing) and system (driven by CPU, memory, temperature, network or the clock).
 
-<p align="center"><img src="docs/screenshots/macros-remap.png" alt="OpenAULA Macros & Remap page — remap engine toggle and binding editor" width="800"></p>
+<p align="center"><img src="docs/screenshots/effects.png" alt="OpenAULA effect picker open on a layer, showing the Motion, Reactive and System groups" width="800"></p>
+
+**Remap** — bind any physical key to another key, disable it, or attach a multi-step macro, all applied system-wide by `openaula-remapd`.
+
+<p align="center"><img src="docs/screenshots/macros-remap.png" alt="OpenAULA Remap page — remap engine toggle, binding editor and current bindings" width="800"></p>
 
 **Settings** — daemon status and calibration in one place.
 
@@ -142,9 +147,49 @@ Both processes read/write plain files under `~/.config/openaula/` (`state.conf`,
 `profiles.conf`, `remap.conf`) — nothing is stored in a database or requires network
 access beyond your own machine.
 
+## Lighting layers & effects
+
+The backlight is a **stack of layers**, composited bottom to top — so different keys can
+run different effects, or several effects can share the same keys. Each layer has its
+own effect, colour, speed, opacity, set of keys, and blend mode:
+
+- **Cover** — replaces what's below it.
+- **Add** — light adds up.
+- **Lighten** — the brighter colour wins.
+- **Tint** — multiplies what's below (e.g. a white Breath over a Canvas makes the painted
+  keys breathe).
+
+Tools above the keyboard:
+
+- **Paint** — click or drag across keys to colour them with the brush (any colour, or
+  Alt-click a key to pick up its colour). Paint lands on the topmost **Canvas** layer,
+  which is created automatically the first time you paint; **Erase** removes keys from it
+  again so the layers below show through.
+- **Layer keys** — choose which keys the selected layer covers, by clicking/dragging or
+  with presets (Letters, Numbers, F-row, WASD, Arrows, Modifiers, Nav, Invert…).
+
+Effects come in five groups:
+
+| Group | Effects |
+|---|---|
+| Still | Canvas, Horizon, Blackout |
+| Ambient | Breath, Aurora, Starfield, Pulse, Chroma, Prism, Vortex, Ember |
+| Motion | Tide, Pendulum, Echo, Rain, Cascade, Meteor, Serpent, Wipe, Checker, Flash, Bloom, Confetti |
+| Reactive | Afterglow, Splash, Lock Light — driven by real keystrokes |
+| System | Processor, Memory, Thermal, Traffic, Clock — driven by the machine |
+
+Reactive effects read the F75's own input device **read-only** (it is never grabbed, so
+typing is unaffected); system effects read `/proc` and `/sys` (CPU load, memory, CPU
+temperature, network throughput) and the local clock. Both run inside
+`openaula-daemon`, so they keep working with the browser closed. The browser preview
+shows the same metrics, and previews the reactive effects from keys typed while the page
+has focus.
+
+Settings saved before layers existed are converted automatically on first load.
+
 ## Macros & key remaps
 
-The **Macros & Remap** page (keyboard-swap icon in the left rail) is the web UI for key
+The **Remap** tab is the web UI for key
 remapping, backed by the `openaula-remapd` engine and the `core/RemapConfig` file
 format.
 
@@ -186,6 +231,9 @@ all — until it's both enabled **and** has at least one binding configured, so 
 it is not itself risky.
 
 ## Known limitations
+
+- **Reactive effects go dark while remaps are enabled.** `openaula-remapd` grabs the
+  keyboard exclusively, so `openaula-daemon` no longer sees its keystrokes.
 
 - **No calibration UI walkthrough beyond the Settings page.** If your board reports as
   uncalibrated (see Settings), per-key custom colours may land on the wrong physical
